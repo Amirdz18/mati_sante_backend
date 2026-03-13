@@ -10,6 +10,7 @@
 // ✅ RDV + Anti-double + Stats + SMS (simulé par défaut)
 
 require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const pool = require("./db");
@@ -20,7 +21,20 @@ const jwt = require("jsonwebtoken");
 
 const app = express();
 
+const patientUploadStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/");
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = Date.now() + "-" + file.originalname;
+    cb(null, uniqueName);
+  },
+});
+
+const patientUpload = multer({ storage: patientUploadStorage });
+
 app.use("/uploads", express.static("uploads"));
+
 
 console.log("✅ SERVER.JS VERSION:", new Date().toISOString());
 
@@ -315,6 +329,14 @@ return next();
     return res.status(401).json({ error: "Token invalide ou expiré" });
   }
 }
+function roleRequired(...roles) {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ error: "Accès refusé" });
+    }
+    next();
+  };
+}
 
 // RBAC (rôles)
 function requireRole(...allowed) {
@@ -337,7 +359,7 @@ const staff = requireRole("secretaire", "medecin", "admin");
 // =============================
 
 // LIST
-app.get("/patients", authRequired, medecinOrAdmin, async (req, res) => {
+app.get("/patients", authRequired, staff, async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT * FROM patients WHERE cabinet_id=$1 ORDER BY id DESC",
@@ -352,7 +374,7 @@ app.get("/patients", authRequired, medecinOrAdmin, async (req, res) => {
 // =============================
 // PATIENTS - CREATE (sans created_at/updated_at)
 // =============================
-app.post("/patients", authRequired, medecinOrAdmin, async (req, res) => {
+app.post("/patients", authRequired, staff, async (req, res) => {
   try {
     const {
       nom,
@@ -371,44 +393,97 @@ app.post("/patients", authRequired, medecinOrAdmin, async (req, res) => {
     if (!nom) {
       return res.status(400).json({ error: "nom obligatoire" });
     }
+if (telephone && String(telephone).trim() !== "") {
+  const existingPhone = await pool.query(
+    "SELECT id FROM patients WHERE telephone=$1 AND cabinet_id=$2 LIMIT 1",
+    [telephone, req.user.cabinet_id]
+  );
 
+  if (existingPhone.rows.length > 0) {
+    return res.status(409).json({ error: "Un patient avec ce téléphone existe déjà" });
+  }
+}
+if (email && String(email).trim() !== "") {
+  const existingEmail = await pool.query(
+    "SELECT id FROM patients WHERE email=$1 AND cabinet_id=$2 LIMIT 1",
+    [email, req.user.cabinet_id]
+  );
+
+  if (existingEmail.rows.length > 0) {
+    return res.status(409).json({ error: "Un patient avec cet email existe déjà" });
+  }
+}
     const q = `
-      INSERT INTO patients
-(nom, prenom, date_naissance, sexe, telephone, adresse, ville, cnas, email, groupe_sanguin, patient_app_id, cabinet_id)
-VALUES
-($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-RETURNING *
+  INSERT INTO patients
+  (nom, prenom, date_naissance, sexe, telephone, adresse, ville, cnas, email, groupe_sanguin, patient_app_id, cabinet_id)
+  VALUES
+  ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+  RETURNING *
+`;
 
-    `;
+const r = await pool.query(q, [
+  nom,
+  prenom || null,
+  date_naissance || null,
+  sexe || null,
+  telephone || null,
+  adresse || null,
+  ville || null,
+  cnas || null,
+  email || null,
+  groupe_sanguin || null,
+  patient_app_id || null,
+  req.user.cabinet_id
+]);
 
-    const r = await pool.query(q, [
-      nom,
-      prenom || null,
-      date_naissance || null,
-      sexe || null,
-      telephone || null,
-      adresse || null,
-      ville || null,
-      cnas || null,
-      email || null,
-      groupe_sanguin || null,
-      patient_app_id || null,
-      req.user.cabinet_id
-    ]);
+const patient = r.rows[0];
 
-    return res.json(r.rows[0]);
+const r2 = await pool.query(
+  `
+  UPDATE patients
+  SET num_dossier = 'DS-' || LPAD(id::text, 4, '0')
+  WHERE id = $1
+  RETURNING *
+  `,
+  [patient.id]
+);
+
+return res.json(r2.rows[0]);
   } catch (err) {
     console.log("POST /patients ERROR:", err.message);
-    return res.status(500).json({ error: err.message });
+    if (err.code === "23505") {
+  return res.status(409).json({ error: "Téléphone ou email déjà utilisé pour ce cabinet" });
+}
+return res.status(500).json({ error: err.message });
   }
 });
 
 // UPDATE
-app.put("/patients/:id", authRequired, medecinOrAdmin, async (req, res) => {
+app.put("/patients/:id", authRequired, staff, async (req, res) => {
   try {
     const { id } = req.params;
     const cur = await pool.query("SELECT * FROM patients WHERE id=$1", [id]);
     if (cur.rows.length === 0) return res.status(404).json({ error: "Patient introuvable" });
+    if (req.body.telephone && String(req.body.telephone).trim() !== "") {
+  const existingPhone = await pool.query(
+    "SELECT id FROM patients WHERE telephone=$1 AND cabinet_id=$2 AND id<>$3 LIMIT 1",
+    [req.body.telephone, req.user.cabinet_id, id]
+  );
+
+  if (existingPhone.rows.length > 0) {
+    return res.status(409).json({ error: "Un autre patient avec ce téléphone existe déjà" });
+  }
+}
+if (req.body.email && String(req.body.email).trim() !== "") {
+  const existingEmail = await pool.query(
+    "SELECT id FROM patients WHERE email=$1 AND cabinet_id=$2 AND id<>$3 LIMIT 1",
+    [req.body.email, req.user.cabinet_id, id]
+  );
+
+  if (existingEmail.rows.length > 0) {
+    return res.status(409).json({ error: "Un autre patient avec cet email existe déjà" });
+  }
+}
 
     const payload = {
       nom: req.body.nom,
@@ -449,7 +524,11 @@ app.delete("/patients/:id", authRequired, medecinOrAdmin, async (req, res) => {
     if (r.rows.length === 0) return res.status(404).json({ error: "Patient introuvable" });
     res.json({ ok: true, message: "Patient supprimé ✅" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (err.code === "23505") {
+  return res.status(409).json({ error: "Téléphone ou email déjà utilisé pour ce cabinet" });
+}
+res.status(500).json({ error: err.message });
+
   }
 });
 
@@ -578,17 +657,27 @@ app.delete("/antecedents/:id", async (req, res) => {
 /* =========================================================
    ==================== CONSULTATIONS =======================
 ========================================================= */
-app.get("/patients/:id/consultations", async (req, res) => {
+app.get("/patients/:id/consultations", authRequired, staff, async (req, res) => {
   const { id } = req.params;
+
   try {
+    const patient = await pool.query(
+      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
+      [id, req.user.cabinet_id]
+    );
+
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
     const result = await pool.query(
-  `SELECT *,
-   COALESCE(compte_rendu, diagnostic, motif, traitement, etat_clinique, remarque_evolution) AS contenu
-   FROM consultations
-   WHERE patient_id=$1
-   ORDER BY date_consultation DESC, id DESC`,
-  [id]
-);
+      `SELECT *,
+       COALESCE(compte_rendu, diagnostic, motif, traitement, etat_clinique, remarque_evolution) AS contenu
+       FROM consultations
+       WHERE patient_id=$1
+       ORDER BY date_consultation DESC, id DESC`,
+      [id]
+    );
 
     res.json(result.rows);
   } catch (err) {
@@ -596,12 +685,11 @@ app.get("/patients/:id/consultations", async (req, res) => {
   }
 });
 
-app.post("/consultations", async (req, res) => {
-  try {
 
+app.post("/consultations", authRequired, staff, async (req, res) => {
+  try {
     const {
       patient_id,
-      medecin_id,
       motif,
       diagnostic,
       compte_rendu,
@@ -613,38 +701,57 @@ app.post("/consultations", async (req, res) => {
       traitement
     } = req.body;
 
-    const result = await pool.query(
-      `INSERT INTO consultations
-(patient_id, motif, diagnostic, etat_clinique, remarque_evolution,
- tension, temperature, poids, traitement, compte_rendu)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-      RETURNING *`,
-      [
-        Number(patient_id),
-        medecin_id ? Number(medecin_id) : 1,
-        motif || null,
-        diagnostic || null,
-        etat_clinique || null,
-        remarque_evolution || null,
-        tension || null,
-        temperature || null,
-        poids || null,
-        traitement || null,
-        compte_rendu || null
-      ]
+    const patient = await pool.query(
+      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
+      [patient_id, req.user.cabinet_id]
     );
 
-    res.json(result.rows[0]);
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
 
+    const result = await pool.query(
+  `INSERT INTO consultations
+   (patient_id, date_consultation, motif, diagnostic, etat_clinique, remarque_evolution,
+    tension, temperature, poids, traitement, compte_rendu)
+   VALUES ($1, CURRENT_DATE, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+   RETURNING *`,
+  [
+    Number(patient_id),
+    motif || null,
+    diagnostic || null,
+    etat_clinique || null,
+    remarque_evolution || null,
+    tension || null,
+    temperature || null,
+    poids || null,
+    traitement || null,
+    compte_rendu || null
+  ]
+);
+
+
+    res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
-
-app.put("/consultations/:id", async (req, res) => {
+})
+app.put("/consultations/:id", authRequired, staff, async (req, res) => {
   try {
     const cols = await getTableColumns("consultations");
     const { id } = req.params;
+
+    const current = await pool.query(
+      `SELECT c.id
+       FROM consultations c
+       JOIN patients p ON p.id = c.patient_id
+       WHERE c.id = $1 AND p.cabinet_id = $2`,
+      [id, req.user.cabinet_id]
+    );
+
+    if (current.rows.length === 0) {
+      return res.status(404).json({ error: "Consultation introuvable" });
+    }
 
     const payload = {
       motif: req.body.motif ?? null,
@@ -660,6 +767,7 @@ app.put("/consultations/:id", async (req, res) => {
 
     const sets = [];
     const params = [];
+
     for (const [k, v] of Object.entries(payload)) {
       if (!cols.has(k)) continue;
       params.push(v);
@@ -669,68 +777,166 @@ app.put("/consultations/:id", async (req, res) => {
     if (sets.length === 0) {
       return res.status(400).json({ error: "Aucune colonne à mettre à jour (schema incompatible)" });
     }
-    // 🔁 Si date ou heure changent → on réactive le rappel
-if (req.body.date_rdv !== undefined || req.body.heure_debut !== undefined || req.body.heure_fin !== undefined) {
-  sets.push(`sms_rappel_envoye=FALSE`);
-}
+
+    if (req.body.date_rdv !== undefined || req.body.heure_debut !== undefined || req.body.heure_fin !== undefined) {
+      sets.push(`sms_rappel_envoye=FALSE`);
+    }
+
     params.push(id);
+
     const q = `UPDATE consultations SET ${sets.join(", ")} WHERE id=$${params.length} RETURNING *`;
     const result = await pool.query(q, params);
 
-    if (result.rows.length === 0) return res.status(404).json({ error: "Consultation introuvable" });
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Consultation introuvable" });
+    }
+
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.delete("/consultations/:id", async (req, res) => {
+app.delete("/consultations/:id", authRequired, staff, async (req, res) => {
   const { id } = req.params;
+
   try {
+    const check = await pool.query(
+      `SELECT c.id
+       FROM consultations c
+       JOIN patients p ON p.id = c.patient_id
+       WHERE c.id=$1 AND p.cabinet_id=$2`,
+      [id, req.user.cabinet_id]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: "Consultation introuvable" });
+    }
+
     await pool.query("DELETE FROM consultations WHERE id=$1", [id]);
+
     res.json({ message: "Consultation supprimée ✅" });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+app.get("/patients/:id/timeline", authRequired, staff, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const patient = await pool.query(
+      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
+      [id, req.user.cabinet_id]
+    );
+
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
+    const consultations = await pool.query(
+      `SELECT 
+        id,
+        date_consultation AS date,
+        'consultation' AS type,
+        motif,
+        diagnostic,
+        traitement
+       FROM consultations
+       WHERE patient_id=$1`,
+      [id]
+    );
+
+    const documents = await pool.query(
+      `SELECT
+        id,
+        created_at AS date,
+        'document' AS type,
+        titre,
+        nom
+       FROM documents
+       WHERE patient_id=$1`,
+      [id]
+    );
+
+    const timeline = [
+      ...consultations.rows,
+      ...documents.rows
+    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    res.json(timeline);
+
+  } catch (err) {
+    console.log("TIMELINE ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 /* =========================================================
    ==================== ANALYSES ============================
 ========================================================= */
-app.get("/patients/:id/analyses", async (req, res) => {
+app.get("/patients/:id/analyses", authRequired, staff, async (req, res) => {
   const { id } = req.params;
+
   try {
-    const p = await pool.query("SELECT patient_app_id FROM patients WHERE id=$1", [id]);
-    const patient_app_id = p.rows?.[0]?.patient_app_id;
-    if (!patient_app_id) return res.json([]);
-    const result = await pool.query("SELECT * FROM analyses WHERE patient_app_id=$1 ORDER BY id DESC", [patient_app_id]);
+
+    const p = await pool.query(
+      "SELECT patient_app_id FROM patients WHERE id=$1 AND cabinet_id=$2",
+      [id, req.user.cabinet_id]
+    );
+
+    if (p.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
+    const patient_app_id = p.rows[0]?.patient_app_id;
+
+    const result = await pool.query(
+      "SELECT * FROM analyses WHERE patient_app_id=$1 OR patient_id=$2 ORDER BY id DESC",
+      [patient_app_id, id]
+    );
+
     res.json(result.rows);
+
   } catch (err) {
+    console.log("GET ANALYSES ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post("/analyses", upload.single("file"), async (req, res) => {
+app.post("/analyses", authRequired, staff, upload.single("file"), async (req, res) => {
   try {
+
     const cols = await getTableColumns("analyses");
+
     const patient_id = req.body.patient_id ? Number(req.body.patient_id) : null;
     const consultation_id = req.body.consultation_id ? Number(req.body.consultation_id) : null;
-    const medecin_id = req.body.medecin_id ? Number(req.body.medecin_id) : 1;
-    const type_analyse = req.body.type_analyse || req.body.nom || null;
+    const medecin_id = req.body.medecin_id ? Number(req.body.medecin_id) : req.user.id;
+
+    const type_analyse = req.body.type_analyse || req.body.nom || "Analyse";
+
     const remarque =
-  req.body?.remarque ||
-  req.body?.type_imagerie ||
-  req.body?.nom ||
-  "Imagerie";
+      req.body?.remarque ||
+      req.body?.nom ||
+      "Analyse";
+
     const date_analyse = req.body.date_analyse || null;
 
-    if (!patient_id) return res.status(400).json({ error: "patient_id obligatoire" });
-
-    const p = await pool.query("SELECT patient_app_id FROM patients WHERE id=$1", [patient_id]);
-    const patient_app_id = p.rows?.[0]?.patient_app_id;
-    if (!patient_app_id) {
-      return res.status(400).json({ error: "Ce patient n’est pas lié à patients_app (patient_app_id manquant)" });
+    if (!patient_id) {
+      return res.status(400).json({ error: "patient_id obligatoire" });
     }
+
+    const p = await pool.query(
+      "SELECT patient_app_id FROM patients WHERE id=$1 AND cabinet_id=$2",
+      [patient_id, req.user.cabinet_id]
+    );
+
+    if (p.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
+    const patient_app_id = p.rows[0]?.patient_app_id;
 
     const insertCols = [];
     const insertVals = [];
@@ -743,16 +949,23 @@ app.post("/analyses", upload.single("file"), async (req, res) => {
       insertVals.push("$" + params.length);
     };
 
-    push("patient_app_id", patient_app_id);
-    push("medecin_id", medecin_id);
-    if (consultation_id) push("consultation_id", consultation_id);
-    push("type_analyse", type_analyse);
-    if (date_analyse) push("date_analyse", date_analyse);
-    push("remarque", remarque);
+    push("patient_id", patient_id);
+push("patient_app_id", patient_app_id);
+push("medecin_id", medecin_id);
 
+if (consultation_id) push("consultation_id", consultation_id);
+
+push("nom", type_analyse);
+push("type_analyse", type_analyse);
+if (date_analyse) push("date_analyse", date_analyse);
+
+push("contenu", remarque);
+push("remarque", remarque);
+
+    
     if (req.file) {
       const savedPath = `/uploads/${req.file.filename}`;
-      const fileCol = firstExisting(cols, ["chemin_fichier", "fichier", "file", "path", "url"]);
+      const fileCol = firstExisting(cols, ["chemin_fichier", "fichier", "file", "path", "url", "contenu"]);
       if (fileCol) push(fileCol, savedPath);
     }
 
@@ -763,50 +976,83 @@ app.post("/analyses", upload.single("file"), async (req, res) => {
     const q = `INSERT INTO analyses (${insertCols.join(",")})
                VALUES (${insertVals.join(",")})
                RETURNING *`;
+
     const result = await pool.query(q, params);
+
     res.json(result.rows[0]);
+
   } catch (err) {
+    console.log("CREATE ANALYSE ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-app.delete("/analyses/:id", async (req, res) => {
-  const { id } = req.params;
+app.delete("/analyses/:id", authRequired, async (req, res) => {
   try {
-    await pool.query("DELETE FROM analyses WHERE id=$1", [id]);
-    res.json({ message: "Analyse supprimée ✅" });
+    const id = Number(req.params.id);
+
+    const r = await pool.query(
+      "DELETE FROM analyses WHERE id = $1 RETURNING *",
+      [id]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: "Analyse introuvable" });
+    }
+
+    res.json({ message: "Analyse supprimée ✅", deleted: r.rows[0] });
   } catch (err) {
+    console.log("DELETE ANALYSE ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 /* =========================================================
    ==================== IMAGERIE ============================
 ========================================================= */
-app.get("/patients/:id/imagerie", async (req, res) => {
+app.get("/patients/:id/imagerie", authRequired, staff, async (req, res) => {
   const { id } = req.params;
+
   try {
+    const patient = await pool.query(
+      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
+      [id, req.user.cabinet_id]
+    );
+
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
     const result = await pool.query(
       "SELECT * FROM imagerie WHERE patient_id=$1 ORDER BY id DESC",
       [id]
     );
+
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-
-app.post("/imagerie", upload.single("file"), async (req, res) => {
+app.post("/imagerie", authRequired, staff, upload.single("file"), async (req, res) => {
   try {
     const patient_id = req.body?.patient_id ? Number(req.body.patient_id) : null;
     const type_imagerie = req.body?.type_imagerie || null;
     const remarque = req.body?.remarque || null;
-
     const fichier = req.file ? `/uploads/${req.file.filename}` : null;
 
     if (!patient_id) {
       return res.status(400).json({ error: "patient_id obligatoire" });
+    }
+
+    const patient = await pool.query(
+      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
+      [patient_id, req.user.cabinet_id]
+    );
+
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
     }
 
     const result = await pool.query(
@@ -823,10 +1069,22 @@ app.post("/imagerie", upload.single("file"), async (req, res) => {
   }
 });
 
-
-app.delete("/imagerie/:id", async (req, res) => {
+app.delete("/imagerie/:id", authRequired, staff, async (req, res) => {
   const { id } = req.params;
+
   try {
+    const check = await pool.query(
+      `SELECT i.id
+       FROM imagerie i
+       JOIN patients p ON p.id = i.patient_id
+       WHERE i.id=$1 AND p.cabinet_id=$2`,
+      [id, req.user.cabinet_id]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: "Imagerie introuvable" });
+    }
+
     await pool.query("DELETE FROM imagerie WHERE id=$1", [id]);
     res.json({ message: "Imagerie supprimée ✅" });
   } catch (err) {
@@ -836,12 +1094,21 @@ app.delete("/imagerie/:id", async (req, res) => {
 
 
 /* =========================================================
-   ==================== ORDONNANCES ========================
+   ==================== ORDONNANCES =========================
 ========================================================= */
-app.get("/patients/:id/ordonnances", async (req, res) => {
+app.get("/patients/:id/ordonnances", authRequired, staff, async (req, res) => {
   const { id } = req.params;
 
   try {
+    const patient = await pool.query(
+      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
+      [id, req.user.cabinet_id]
+    );
+
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
     const result = await pool.query(
       "SELECT * FROM ordonnances WHERE patient_id=$1 ORDER BY id DESC",
       [id]
@@ -854,8 +1121,7 @@ app.get("/patients/:id/ordonnances", async (req, res) => {
   }
 });
 
-
-app.post("/ordonnances", upload.single("file"), async (req, res) => {
+app.post("/ordonnances", authRequired, staff, upload.single("file"), async (req, res) => {
   try {
     const patient_id = req.body?.patient_id ? Number(req.body.patient_id) : null;
     const titre = req.body?.titre || "Ordonnance";
@@ -872,6 +1138,15 @@ app.post("/ordonnances", upload.single("file"), async (req, res) => {
       return res.status(400).json({ error: "patient_id obligatoire" });
     }
 
+    const patient = await pool.query(
+      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
+      [patient_id, req.user.cabinet_id]
+    );
+
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
     const result = await pool.query(
       `INSERT INTO ordonnances (patient_id, titre, contenu)
        VALUES ($1,$2,$3)
@@ -886,14 +1161,46 @@ app.post("/ordonnances", upload.single("file"), async (req, res) => {
   }
 });
 
-/* =========================================================
-   ====================== DOCUMENTS ========================
-========================================================= */
-
-app.get("/patients/:id/documents", async (req, res) => {
+app.delete("/ordonnances/:id", authRequired, staff, async (req, res) => {
   const { id } = req.params;
 
   try {
+    const check = await pool.query(
+      `SELECT o.id
+       FROM ordonnances o
+       JOIN patients p ON p.id = o.patient_id
+       WHERE o.id=$1 AND p.cabinet_id=$2`,
+      [id, req.user.cabinet_id]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: "Ordonnance introuvable" });
+    }
+
+    await pool.query("DELETE FROM ordonnances WHERE id=$1", [id]);
+    res.json({ message: "Ordonnance supprimée ✅" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =========================================================
+// DOCUMENTS PATIENT
+// =========================================================
+
+app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const patient = await pool.query(
+      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
+      [id, req.user.cabinet_id]
+    );
+
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
     const result = await pool.query(
       "SELECT * FROM documents WHERE patient_id=$1 ORDER BY id DESC",
       [id]
@@ -907,6 +1214,41 @@ app.get("/patients/:id/documents", async (req, res) => {
 });
 
 
+// ⬇️ AJOUTE LA NOUVELLE ROUTE ICI ⬇️
+
+app.post("/patients/:id/documents", authRequired, staff, async (req, res) => {
+  const { id } = req.params;
+  const { titre, nom, contenu } = req.body;
+
+  try {
+    const patient = await pool.query(
+      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
+      [id, req.user.cabinet_id]
+    );
+
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO documents (patient_id, titre, nom, contenu)
+       VALUES ($1,$2,$3,$4)
+       RETURNING *`,
+      [
+        id,
+        titre || null,
+        nom || null,
+        contenu || null
+      ]
+    );
+
+    res.json(result.rows[0]);
+
+  } catch (err) {
+    console.log("POST DOCUMENT ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.post("/documents", upload.single("file"), async (req, res) => {
   try {
@@ -1067,20 +1409,35 @@ function isValidISODate(d) {
 // -------------------------
 // Anti-chevauchement (check SQL)
 // -------------------------
-async function checkRdvConflict({ date_rdv, heure_debut, heure_fin, excludeId = null }) {
+async function checkRdvConflict({
+  date_rdv,
+  heure_debut,
+  heure_fin,
+  cabinet_id,
+  excludeId = null
+}) {
   const q = `
     SELECT id
     FROM rendez_vous
     WHERE date_rdv = $1::date
+      AND cabinet_id = $2
       AND statut <> 'annule'
-      AND ($4::int IS NULL OR id <> $4::int)
+      AND ($5::int IS NULL OR id <> $5::int)
       AND (
-        heure_debut < COALESCE($3::time, ($2::time + interval '30 min')::time)
-        AND COALESCE(heure_fin, (heure_debut + interval '30 min')::time) > $2::time
+        heure_debut < COALESCE($4::time, ($3::time + interval '30 min')::time)
+        AND COALESCE(heure_fin, (heure_debut + interval '30 min')::time) > $3::time
       )
     LIMIT 1
   `;
-  const r = await pool.query(q, [date_rdv, heure_debut, heure_fin || null, excludeId]);
+
+  const r = await pool.query(q, [
+    date_rdv,
+    cabinet_id,
+    heure_debut,
+    heure_fin || null,
+    excludeId
+  ]);
+
   return r.rows.length > 0;
 }
 
@@ -1129,23 +1486,23 @@ app.get("/rdv", authRequired, async (req, res) => {
     const date = req.query.date || null;
 
     const r = await pool.query(
-  `
-  SELECT
-    rv.id,
-    rv.date_rdv,
-    rv.heure_debut AS heure,
-    rv.motif,
-    rv.statut,
-    COALESCE(p.nom, rv.patient_nom) AS nom,
-    COALESCE(p.prenom, rv.patient_prenom) AS prenom
-  FROM rendez_vous rv
-  LEFT JOIN patients p ON p.id = rv.patient_id
-  WHERE ($1::date IS NULL OR rv.date_rdv::date = $1::date)
-  ORDER BY rv.heure_debut ASC
-  `,
-  [date]
-);
-
+      `
+      SELECT
+        rv.id,
+        rv.date_rdv,
+        rv.heure_debut AS heure,
+        rv.motif,
+        rv.statut,
+        COALESCE(p.nom, rv.patient_nom) AS nom,
+        COALESCE(p.prenom, rv.patient_prenom) AS prenom
+      FROM rendez_vous rv
+      LEFT JOIN patients p ON p.id = rv.patient_id
+      WHERE rv.cabinet_id = $2
+        AND ($1::date IS NULL OR rv.date_rdv::date = $1::date)
+      ORDER BY rv.heure_debut ASC
+      `,
+      [date, req.user.cabinet_id]
+    );
 
     res.json(r.rows);
   } catch (err) {
@@ -1154,11 +1511,10 @@ app.get("/rdv", authRequired, async (req, res) => {
   }
 });
 
-
 // =========================================================
 // RDV SEMAINE
 // =========================================================
-app.get("/rdv/week", async (req, res) => {
+app.get("/rdv/week", authRequired, async (req, res) => {
   try {
     const { start } = req.query;
     if (!start) return res.status(400).json({ error: "start obligatoire (YYYY-MM-DD)" });
@@ -1177,11 +1533,12 @@ app.get("/rdv/week", async (req, res) => {
 const r = await pool.query(
   `
   ${baseSelect}
-  WHERE rv.date_rdv >= $1::date
+  WHERE rv.cabinet_id = $2
+    AND rv.date_rdv >= $1::date
     AND rv.date_rdv < ($1::date + interval '7 day')
   ORDER BY rv.date_rdv ASC, rv.heure_debut ASC, rv.id ASC
   `,
-  [start]
+  [start, req.user.cabinet_id]
 );
 
 res.json(r.rows);
@@ -1278,19 +1635,28 @@ app.post("/rdv", async (req, res) => {
       notes,
     } = req.body;
 
-    if (!date_rdv || !isValidISODate(date_rdv))
-      return res.status(400).json({ error: "date_rdv obligatoire (YYYY-MM-DD)" });
+    const cabinet_id = 1;
+  
+   
+    // Date/heure facultatives pour demande mobile
+    if (date_rdv && !isValidISODate(date_rdv)) {
+      return res.status(400).json({ error: "date_rdv invalide (YYYY-MM-DD)" });
+    }
 
-    if (!heure_debut || !isValidTime(heure_debut))
-      return res.status(400).json({ error: "heure_debut obligatoire (HH:MM)" });
+    if (heure_debut && !isValidTime(heure_debut)) {
+      return res.status(400).json({ error: "heure_debut invalide (HH:MM)" });
+    }
 
-    if (heure_fin && !isValidTime(heure_fin))
+    if (heure_fin && !isValidTime(heure_fin)) {
       return res.status(400).json({ error: "heure_fin invalide (HH:MM)" });
+    }
 
-    if (heure_fin && String(heure_fin) <= String(heure_debut))
+    if (heure_fin && heure_debut && String(heure_fin) <= String(heure_debut)) {
       return res.status(400).json({ error: "heure_fin doit être > heure_debut" });
+    }
 
     const hasPatientId = !!patient_id;
+
     if (!hasPatientId) {
       if (!patient_nom || !patient_telephone) {
         return res.status(400).json({
@@ -1299,45 +1665,53 @@ app.post("/rdv", async (req, res) => {
       }
     }
 
-    const conflict = await checkRdvConflict({
-      date_rdv,
-      heure_debut,
-      heure_fin: heure_fin || null,
-      excludeId: null,
-    });
-    if (conflict) return res.status(409).json({ error: "Créneau déjà occupé (conflit RDV) ❌" });
-
-    const ins = await pool.query(
-      `INSERT INTO rendez_vous
-       (patient_id, patient_nom, patient_prenom, patient_telephone, source,
-        date_rdv, heure_debut, heure_fin, motif, statut, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-       RETURNING id`,
-      [
-        hasPatientId ? Number(patient_id) : null,
-        patient_nom || null,
-        patient_prenom || null,
-        patient_telephone || null,
-        source || (hasPatientId ? "logiciel" : "mobile"),
+    // Vérifier conflit seulement si date + heure_debut sont fournies
+    if (date_rdv && heure_debut) {
+      const conflict = await checkRdvConflict({
         date_rdv,
         heure_debut,
-        heure_fin || null,
-        motif || null,
-        statut || "prevu",
-        notes || null,
-      ]
-    );
+        heure_fin: heure_fin || null,
+        cabinet_id,
+        excludeId: null,
+      });
+
+      if (conflict) {
+        return res.status(409).json({ error: "Créneau déjà occupé (conflit RDV) ❌" });
+      }
+    }
+
+    const ins = await pool.query(
+  `INSERT INTO rendez_vous
+   (patient_id, patient_nom, patient_prenom, patient_telephone, source,
+    date_rdv, heure_debut, heure_fin, motif, statut, notes, cabinet_id)
+   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+   RETURNING id`,
+  [
+    hasPatientId ? Number(patient_id) : null,
+    patient_nom || null,
+    patient_prenom || null,
+    patient_telephone || null,
+    source || (hasPatientId ? "logiciel" : "mobile"),
+    date_rdv || null,
+    heure_debut || null,
+    heure_fin || null,
+    motif || null,
+    statut || "demande",
+    notes || null,
+    cabinet_id,
+  ]
+);
+
+
 
     const out = await selectRdvJoinedById(ins.rows[0].id);
 
-    // SMS confirmation (async) + anti-double DB
+    // SMS confirmation (async)
     setImmediate(async () => {
       try {
         if (!out?.telephone) return;
-
         const msg = formatRdvSms(out, "create");
 
-        // Si la colonne n'existe pas (ancienne base), on envoie juste le SMS sans flag DB.
         const hasFlag = await hasSmsConfirmFlagColumn();
         if (!hasFlag) {
           await sendSms(out.telephone, msg);
@@ -1348,6 +1722,7 @@ app.post("/rdv", async (req, res) => {
           "SELECT sms_confirm_envoye FROM rendez_vous WHERE id=$1",
           [out.id]
         );
+
         if (check.rows?.[0]?.sms_confirm_envoye) return;
 
         await sendSms(out.telephone, msg);
@@ -1369,41 +1744,105 @@ app.post("/rdv", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+ app.post("/upload-patient", patientUpload.single("file"), async (req, res) => {
+  try {
+    const file = req.file;
+    const { telephone } = req.body;
 
+    if (!file) {
+      return res.status(400).json({ error: "Aucun fichier" });
+    }
+
+    if (!telephone) {
+      return res.status(400).json({ error: "Téléphone manquant" });
+    }
+
+    console.log("Fichier reçu :", file.filename);
+    console.log("Téléphone patient :", telephone);
+
+    const patientResult = await pool.query(
+      `SELECT id FROM patients WHERE telephone = $1 LIMIT 1`,
+      [telephone]
+    );
+
+    if (patientResult.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable avec ce téléphone" });
+    }
+
+    const patientId = patientResult.rows[0].id;
+
+    await pool.query(
+  `INSERT INTO documents (patient_id, titre, contenu, nom, created_at)
+   VALUES ($1, $2, $3, $4, NOW())`,
+  [
+    patientId,
+    file.originalname,
+    `/uploads/${file.filename}`,
+    file.filename,
+  ]
+);
+
+    res.json({
+      success: true,
+      fichier: file.filename,
+      patient_id: patientId,
+    });
+  } catch (err) {
+    console.log("UPLOAD PATIENT ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 // =========================================================
 // UPDATE RDV + SMS modification
 // =========================================================
-app.put("/rdv/:id", async (req, res) => {
+app.put("/rdv/:id", authRequired, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const cur = await pool.query("SELECT * FROM rendez_vous WHERE id=$1", [id]);
-    if (cur.rows.length === 0) return res.status(404).json({ error: "RDV introuvable" });
+    const cur = await pool.query(
+      "SELECT * FROM rendez_vous WHERE id=$1 AND cabinet_id=$2",
+      [id, 1]
+    );
+
+    if (cur.rows.length === 0) {
+      return res.status(404).json({ error: "RDV introuvable" });
+    }
+
     const current = cur.rows[0];
 
     const nextDate = req.body.date_rdv ?? current.date_rdv;
     const nextStart = req.body.heure_debut ?? current.heure_debut;
     const nextEnd = req.body.heure_fin !== undefined ? req.body.heure_fin : current.heure_fin;
 
-    if (req.body.date_rdv && !isValidISODate(req.body.date_rdv))
+    if (req.body.date_rdv && !isValidISODate(req.body.date_rdv)) {
       return res.status(400).json({ error: "date_rdv invalide (YYYY-MM-DD)" });
+    }
 
-    if (req.body.heure_debut && !isValidTime(req.body.heure_debut))
+    if (req.body.heure_debut && !isValidTime(req.body.heure_debut)) {
       return res.status(400).json({ error: "heure_debut invalide (HH:MM)" });
+    }
 
-    if (req.body.heure_fin && !isValidTime(req.body.heure_fin))
+    if (req.body.heure_fin && !isValidTime(req.body.heure_fin)) {
       return res.status(400).json({ error: "heure_fin invalide (HH:MM)" });
+    }
 
-    if (nextEnd && String(nextEnd) <= String(nextStart))
+    if (nextEnd && String(nextEnd) <= String(nextStart)) {
       return res.status(400).json({ error: "heure_fin doit être > heure_debut" });
+    }
 
-    const conflict = await checkRdvConflict({
-      date_rdv: nextDate,
-      heure_debut: nextStart,
-      heure_fin: nextEnd || null,
-      excludeId: Number(id),
-    });
-    if (conflict) return res.status(409).json({ error: "Créneau déjà occupé (conflit RDV) ❌" });
+    if (nextDate && nextStart) {
+      const conflict = await checkRdvConflict({
+        date_rdv: nextDate,
+        heure_debut: nextStart,
+        heure_fin: nextEnd || null,
+        cabinet_id: 1,
+        excludeId: Number(id),
+      });
+
+      if (conflict) {
+        return res.status(409).json({ error: "Créneau déjà occupé (conflit RDV) ❌" });
+      }
+    }
 
     const payload = {
       patient_id: req.body.patient_id,
@@ -1421,12 +1860,16 @@ app.put("/rdv/:id", async (req, res) => {
 
     const sets = [];
     const params = [];
+
     for (const [k, v] of Object.entries(payload)) {
       if (v === undefined) continue;
       params.push(v);
       sets.push(`${k}=$${params.length}`);
     }
-    if (sets.length === 0) return res.status(400).json({ error: "Aucun champ à modifier" });
+
+    if (sets.length === 0) {
+      return res.status(400).json({ error: "Aucun champ à modifier" });
+    }
 
     sets.push(`updated_at=NOW()`);
     params.push(id);
@@ -1436,7 +1879,6 @@ app.put("/rdv/:id", async (req, res) => {
 
     const out = await selectRdvJoinedById(r.rows[0].id);
 
-    // SMS update (async)
     setImmediate(async () => {
       try {
         if (!out?.telephone) return;
@@ -1456,29 +1898,177 @@ app.put("/rdv/:id", async (req, res) => {
   }
 });
 
+
 // =========================================================
 // DELETE RDV (delete réel)
 // =========================================================
 app.delete("/rdv/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const r = await pool.query("DELETE FROM rendez_vous WHERE id=$1 RETURNING id", [id]);
+    const r = await pool.query(
+  "DELETE FROM rendez_vous WHERE id=$1 AND cabinet_id=$2 RETURNING id",
+  [id, req.user.cabinet_id]
+);
+
     if (r.rows.length === 0) return res.status(404).json({ error: "RDV introuvable" });
     res.json({ message: "RDV supprimé ✅" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+// =========================================================
+// CRENEAUX LIBRES JOUR
+// =========================================================
+
+app.get("/rdv/free-slots", authRequired, async (req, res) => {
+  try {
+    const date = req.query.date;
+    const step = Number(req.query.step || 30);
+
+    if (!date) {
+      return res.status(400).json({ error: "date obligatoire (YYYY-MM-DD)" });
+    }
+
+    const r = await pool.query(
+      `SELECT heure_debut, heure_fin
+       FROM rendez_vous
+       WHERE date_rdv=$1
+         AND cabinet_id=$2
+         AND statut <> 'annule'
+       ORDER BY heure_debut`,
+      [date, req.user.cabinet_id]
+    );
+
+    const slots = [];
+    const startHour = 9;
+    const endHour = 18;
+
+    const toMinutes = (hhmm) => {
+      if (!hhmm) return null;
+      const [h, m] = String(hhmm).slice(0, 5).split(":").map(Number);
+      return h * 60 + m;
+    };
+
+    const occupiedRanges = r.rows.map((x) => {
+      const start = toMinutes(x.heure_debut);
+      const end = x.heure_fin ? toMinutes(x.heure_fin) : start + 30;
+      return {
+        start,
+        end
+      };
+    });
+
+    for (let h = startHour; h < endHour; h++) {
+      for (let m = 0; m < 60; m += step) {
+        const slot = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+        const slotStart = toMinutes(slot);
+        const slotEnd = slotStart + step;
+
+        const overlaps = occupiedRanges.some((range) => {
+          return slotStart < range.end && slotEnd > range.start;
+        });
+
+        if (!overlaps) {
+          slots.push(slot);
+        }
+      }
+    }
+
+    res.json(slots);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/rdv/next-free", authRequired, async (req, res) => {
+  try {
+    const step = Number(req.query.step || 30);
+    const cabinetId = req.user?.cabinet_id || req.user?.cabinetId || 1;
+
+    const { rows } = await pool.query(
+      `
+      SELECT *
+      FROM rendez_vous
+      WHERE ($1::int IS NULL OR cabinet_id = $1::int)
+      ORDER BY created_at DESC
+      `,
+      [cabinetId]
+    );
+
+    const toMinutes = (hhmm) => {
+      const [h, m] = String(hhmm || "00:00").slice(0, 5).split(":").map(Number);
+      return h * 60 + m;
+    };
+
+    const toISODateLocal = (d) => {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    let date = new Date();
+
+    for (let d = 0; d < 30; d++) {
+      const dateStr = toISODateLocal(date);
+
+      const dayRdv = rows.filter(
+        (x) =>
+          x.date_rdv &&
+          toISODateLocal(new Date(x.date_rdv)) === dateStr &&
+          x.statut !== "annule"
+      );
+
+      const occupied = dayRdv.map((x) => {
+        const start = toMinutes(x.heure_debut);
+        const end = x.heure_fin ? toMinutes(x.heure_fin) : start + step;
+        return { start, end };
+      });
+
+      for (let h = 9; h < 18; h++) {
+        for (let m = 0; m < 60; m += step) {
+          const slotStart = h * 60 + m;
+          const slotEnd = slotStart + step;
+
+          const conflict = occupied.some(
+            (o) => slotStart < o.end && slotEnd > o.start
+          );
+
+          if (!conflict) {
+            const heure = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+            return res.json({
+              date: dateStr,
+              heure,
+            });
+          }
+        }
+      }
+
+      date.setDate(date.getDate() + 1);
+    }
+
+    res.json({ message: "Aucun créneau disponible" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // =========================================================
 // AUDIT RDV (UNIQUE route)
 // =========================================================
-app.get("/rdv/:id/audit", async (req, res) => {
+app.get("/rdv/:id/audit", authRequired, staff, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const exists = await pool.query("SELECT id FROM rendez_vous WHERE id=$1", [id]);
-    if (exists.rows.length === 0) return res.status(404).json({ error: "RDV introuvable" });
+    const exists = await pool.query(
+      "SELECT id FROM rendez_vous WHERE id=$1 AND cabinet_id=$2",
+      [id, req.user.cabinet_id]
+    );
+
+    if (exists.rows.length === 0) {
+      return res.status(404).json({ error: "RDV introuvable" });
+    }
 
     const r = await pool.query(
       `SELECT id, action, note, created_at, old_data, new_data
@@ -1487,6 +2077,7 @@ app.get("/rdv/:id/audit", async (req, res) => {
        ORDER BY created_at DESC`,
       [id]
     );
+
     res.json(r.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1501,23 +2092,22 @@ app.get("/rdv/:id/audit", async (req, res) => {
 async function processRappels2h() {
   try {
     const q = `
-      WITH due AS (
-        SELECT id
-        FROM rendez_vous
-        WHERE statut <> 'annule'
-          AND rappel_envoye_at IS NULL
-          AND start_ts IS NOT NULL
-          AND start_ts >= NOW() + interval '2 hours'
-          AND start_ts <  NOW() + interval '2 hours 2 minutes'
-        FOR UPDATE SKIP LOCKED
-      )
-      UPDATE rendez_vous rv
-      SET rappel_envoye_at = NOW(), updated_at = NOW()
-      FROM due
-      WHERE rv.id = due.id
-      RETURNING rv.id;
-    `;
-
+WITH due AS (
+  SELECT id
+  FROM rendez_vous
+  WHERE statut <> 'annule'
+    AND rappel_envoye_at IS NULL
+    AND start_ts IS NOT NULL
+    AND start_ts >= NOW() + interval '2 hours'
+    AND start_ts < NOW() + interval '2 hours 2 minutes'
+  FOR UPDATE SKIP LOCKED
+)
+UPDATE rendez_vous rv
+SET rappel_envoye_at = NOW(), updated_at = NOW()
+FROM due
+WHERE rv.id = due.id
+RETURNING rv.id;
+`;
     const r = await pool.query(q);
 
     for (const row of r.rows) {
@@ -1620,7 +2210,10 @@ app.post("/users", authRequired, requireAdmin, async (req, res) => {
 
     res.json(created.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (err.code === "23505") {
+  return res.status(409).json({ error: "Email déjà utilisé" });
+}
+res.status(500).json({ error: err.message });
   }
 });
 
@@ -1720,23 +2313,93 @@ app.delete("/users/:id", authRequired, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.delete("/documents/:id", authRequired, staff, async (req, res) => {
+  try {
+    const { id } = req.params;
 
+    const r = await pool.query(
+      "DELETE FROM documents WHERE id = $1 RETURNING *",
+      [id]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: "Document introuvable" });
+    }
+
+    res.json({ success: true, deleted: r.rows[0] });
+  } catch (err) {
+    console.log("DELETE DOCUMENT ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post("/documents/:id/classer-analyse", authRequired, staff, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const docRes = await pool.query(
+      "SELECT * FROM documents WHERE id = $1",
+      [id]
+    );
+
+    if (docRes.rows.length === 0) {
+      return res.status(404).json({ error: "Document introuvable" });
+    }
+
+    const d = docRes.rows[0];
+
+    // récupérer le patient_app_id
+    const p = await pool.query(
+      "SELECT patient_app_id FROM patients WHERE id=$1",
+      [d.patient_id]
+    );
+
+    const patient_app_id = p.rows[0]?.patient_app_id;
+
+    const savedFile =
+  d.contenu || d.fichier || d.file || d.uri || d.chemin_fichier;
+
+const insertRes = await pool.query(
+  `INSERT INTO analyses (patient_app_id, nom, contenu, fichier, created_at)
+   VALUES ($1, $2, $3, $4, NOW())
+   RETURNING *`,
+  [
+    patient_app_id,
+    d.nom || d.titre || "Analyse patient",
+    savedFile,
+    savedFile
+  ]
+);
+
+    await pool.query("DELETE FROM documents WHERE id = $1", [id]);
+
+    console.log("ANALYSE INSEREE =", insertRes.rows[0]);
+
+    res.json({ success: true, analyse: insertRes.rows[0] });
+
+  } catch (err) {
+    console.log("CLASSER ANALYSE ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 // ==============================
 // GET RDV DEMANDES (PC)
 // ==============================
 app.get("/rdv-demandes", authRequired, async (req, res) => {
   try {
-    const cabinetId = req.user?.cabinet_id || req.user?.cabinetId || null;
+    const cabinetId = req.user?.cabinet_id || req.user?.cabinetId || 1;
 
     const { rows } = await pool.query(
       `
       SELECT *
-      FROM rdv_demandes
-      WHERE ($1::int IS NULL OR cabinet_id = $1::int)
+      FROM rendez_vous
+      WHERE statut = 'demande'
+        AND ($1::int IS NULL OR cabinet_id = $1::int)
       ORDER BY created_at DESC
       `,
       [cabinetId]
     );
+
+    console.log("DEMANDES TROUVEES =", rows); // 👈 pour vérifier
 
     res.json(rows);
   } catch (err) {
@@ -1744,18 +2407,26 @@ app.get("/rdv-demandes", authRequired, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-/* ================= DASHBOARD ================= */
 
+/* ================= DASHBOARD ================= */
 app.get("/dashboard/stats", async (req, res) => {
   try {
     const patients = await pool.query("SELECT COUNT(*) FROM patients");
-    const consultations = await pool.query("SELECT COUNT(*) FROM consultations");
-    const rdv = await pool.query("SELECT COUNT(*) FROM rendez_vous");
+    const consultations = await pool.query(
+      "SELECT COUNT(*) FROM consultations WHERE date_consultation = CURRENT_DATE"
+    );
+    const rdv = await pool.query(
+      "SELECT COUNT(*) FROM rendez_vous WHERE date_rdv = CURRENT_DATE AND statut <> 'annule'"
+    );
+    const demandes = await pool.query(
+      "SELECT COUNT(*) FROM rendez_vous WHERE statut = 'demande'"
+    );
 
     res.json({
       patients: Number(patients.rows[0].count || 0),
       consultations: Number(consultations.rows[0].count || 0),
       rendezvous: Number(rdv.rows[0].count || 0),
+      demandes: Number(demandes.rows[0].count || 0),
     });
   } catch (err) {
     console.log("DASHBOARD STATS ERROR:", err.message);
@@ -1763,6 +2434,110 @@ app.get("/dashboard/stats", async (req, res) => {
   }
 });
 
+app.get("/dashboard/document-recu-notification", async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT
+        d.id,
+        d.nom,
+        d.titre,
+        d.contenu,
+        d.created_at,
+        COALESCE(p.nom, '') || ' ' || COALESCE(p.prenom, '') AS patient_nom
+      FROM documents d
+      LEFT JOIN patients p ON p.id = d.patient_id
+      WHERE COALESCE(d.lu_dashboard, false) = false
+      ORDER BY d.created_at DESC, d.id DESC
+      LIMIT 1
+    `);
+
+    res.json(r.rows[0] || null);
+  } catch (err) {
+    console.log("DASHBOARD DOCUMENT NOTIF ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/dashboard/document-recu-notification/:id/read", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await pool.query(
+      `
+      UPDATE documents
+      SET lu_dashboard = true
+      WHERE id = $1
+      `,
+      [id]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.log("DASHBOARD DOCUMENT READ ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+app.get("/dashboard/documents-count", async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT COUNT(*)
+      FROM documents
+      WHERE COALESCE(lu_dashboard,false) = false
+    `);
+
+    res.json({ count: Number(r.rows[0].count || 0) });
+  } catch (err) {
+    console.log("DOC COUNT ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+app.get("/medicaments", async (req, res) => {
+  try {
+
+    const search = req.query.search || ""
+
+    const r = await pool.query(
+      `
+      SELECT id, nom
+      FROM medicaments
+      WHERE nom ILIKE $1
+      ORDER BY nom ASC
+      LIMIT 20
+      `,
+      [`%${search}%`]
+    )
+
+    res.json(r.rows)
+
+  } catch (err) {
+    console.log("MED ERROR", err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+app.get("/posologie", async (req,res)=>{
+  try{
+
+    const search = req.query.search || ""
+
+    const r = await pool.query(
+      `SELECT posologie
+       FROM posologies
+       WHERE medicament ILIKE $1
+       LIMIT 1`,
+       [`%${search}%`]
+    )
+
+    res.json(r.rows[0] || {})
+
+  }catch(err){
+    console.log(err)
+    res.status(500).json({error:err.message})
+  }
+})
+
+
+
+
 app.listen(PORT, () => {
-      console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
+  console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
 });
