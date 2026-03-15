@@ -2705,42 +2705,47 @@ res.json({
 });
 app.get("/rdv-mobile", async (req, res) => {
   try {
-    const { statut } = req.query;
+    const { statut, telephone } = req.query;
 
     let sql = `
       SELECT
-        r.id,
-        p.nom AS patient_nom,
-        p.prenom AS patient_prenom,
-        p.telephone AS patient_telephone,
-        r.date_rdv,
-        r.heure,
-        r.duree_minutes,
-        r.motif,
-        r.statut,
-        r.created_at
-      FROM rdv r
-      LEFT JOIN patients p ON p.id = r.patient_id
+        id,
+        patient_nom,
+        patient_prenom,
+        patient_telephone,
+        date_rdv,
+        heure_debut,
+        heure_fin,
+        motif,
+        statut,
+        notes,
+        created_at
+      FROM rendez_vous
+      WHERE 1=1
     `;
 
     const params = [];
 
     if (statut) {
-      sql += ` WHERE r.statut = $1`;
       params.push(statut);
+      sql += ` AND statut = $${params.length}`;
     }
 
-    sql += ` ORDER BY r.created_at DESC`;
+    if (telephone) {
+      params.push(String(telephone).trim());
+      sql += ` AND patient_telephone = $${params.length}`;
+    }
+
+    sql += ` ORDER BY created_at DESC`;
 
     const result = await pool.query(sql, params);
-
     res.json(result.rows);
-
   } catch (err) {
     console.log("ERREUR RDV MOBILE:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
