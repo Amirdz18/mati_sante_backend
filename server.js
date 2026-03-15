@@ -1845,10 +1845,11 @@ app.post("/rdv", async (req, res) => {
 app.put("/rdv/:id", authRequired, async (req, res) => {
   try {
     const { id } = req.params;
+    const cabinetId = req.user?.cabinet_id || req.user?.cabinetId || 1;
 
     const cur = await pool.query(
       "SELECT * FROM rendez_vous WHERE id=$1 AND cabinet_id=$2",
-      [id, 1]
+      [id, cabinetId]
     );
 
     if (cur.rows.length === 0) {
@@ -1856,7 +1857,6 @@ app.put("/rdv/:id", authRequired, async (req, res) => {
     }
 
     const current = cur.rows[0];
-
     const nextDate = req.body.date_rdv ?? current.date_rdv;
     const nextStart = req.body.heure_debut ?? current.heure_debut;
     const nextEnd = req.body.heure_fin !== undefined ? req.body.heure_fin : current.heure_fin;
@@ -1864,15 +1864,12 @@ app.put("/rdv/:id", authRequired, async (req, res) => {
     if (req.body.date_rdv && !isValidISODate(req.body.date_rdv)) {
       return res.status(400).json({ error: "date_rdv invalide (YYYY-MM-DD)" });
     }
-
     if (req.body.heure_debut && !isValidTime(req.body.heure_debut)) {
       return res.status(400).json({ error: "heure_debut invalide (HH:MM)" });
     }
-
     if (req.body.heure_fin && !isValidTime(req.body.heure_fin)) {
       return res.status(400).json({ error: "heure_fin invalide (HH:MM)" });
     }
-
     if (nextEnd && String(nextEnd) <= String(nextStart)) {
       return res.status(400).json({ error: "heure_fin doit être > heure_debut" });
     }
@@ -1882,10 +1879,9 @@ app.put("/rdv/:id", authRequired, async (req, res) => {
         date_rdv: nextDate,
         heure_debut: nextStart,
         heure_fin: nextEnd || null,
-        cabinet_id: 1,
+        cabinet_id: cabinetId,
         excludeId: Number(id),
       });
-
       if (conflict) {
         return res.status(409).json({ error: "Créneau déjà occupé (conflit RDV) ❌" });
       }
@@ -1907,7 +1903,6 @@ app.put("/rdv/:id", authRequired, async (req, res) => {
 
     const sets = [];
     const params = [];
-
     for (const [k, v] of Object.entries(payload)) {
       if (v === undefined) continue;
       params.push(v);
@@ -1920,9 +1915,18 @@ app.put("/rdv/:id", authRequired, async (req, res) => {
 
     sets.push(`updated_at=NOW()`);
     params.push(id);
+    params.push(cabinetId);
 
-    const q = `UPDATE rendez_vous SET ${sets.join(", ")} WHERE id=$${params.length} RETURNING id`;
+    const q = `UPDATE rendez_vous
+               SET ${sets.join(", ")}
+               WHERE id=$${params.length - 1} AND cabinet_id=$${params.length}
+               RETURNING id`;
+
     const r = await pool.query(q, params);
+
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: "RDV introuvable" });
+    }
 
     const out = await selectRdvJoinedById(r.rows[0].id);
 
