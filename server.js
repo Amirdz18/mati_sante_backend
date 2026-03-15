@@ -459,7 +459,7 @@ return res.status(500).json({ error: err.message });
 });
 
 // UPDATE
-app.put("/patients/:id", authRequired, staff, async (req, res) => {
+app.put("/patients/:id", authRequired, medecinOrAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const cur = await pool.query("SELECT * FROM patients WHERE id=$1", [id]);
@@ -686,7 +686,7 @@ app.get("/patients/:id/consultations", authRequired, staff, async (req, res) => 
 });
 
 
-app.post("/consultations", authRequired, staff, async (req, res) => {
+app.post("/consultations", authRequired, medecinOrAdmin, async (req, res) => {
   try {
     const {
       patient_id,
@@ -736,7 +736,7 @@ app.post("/consultations", authRequired, staff, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 })
-app.put("/consultations/:id", authRequired, staff, async (req, res) => {
+app.put("/consultations/:id", authRequired, medecinOrAdmin, async (req, res) => {
   try {
     const cols = await getTableColumns("consultations");
     const { id } = req.params;
@@ -905,8 +905,9 @@ app.get("/patients/:id/analyses", authRequired, staff, async (req, res) => {
   }
 });
 
-app.post("/analyses", authRequired, staff, upload.single("file"), async (req, res) => {
+app.post("/analyses", authRequired, medecinOrAdmin, upload.single("file"), async (req, res) => {
   try {
+    console.log("BODY ANALYSE =", req.body);
 
     const cols = await getTableColumns("analyses");
 
@@ -922,6 +923,10 @@ app.post("/analyses", authRequired, staff, upload.single("file"), async (req, re
       "Analyse";
 
     const date_analyse = req.body.date_analyse || null;
+
+    const laboratoire = req.body.laboratoire || null;
+    const date_resultat = req.body.date_resultat || null;
+    const conclusion = req.body.conclusion || null;
 
     if (!patient_id) {
       return res.status(400).json({ error: "patient_id obligatoire" });
@@ -950,19 +955,22 @@ app.post("/analyses", authRequired, staff, upload.single("file"), async (req, re
     };
 
     push("patient_id", patient_id);
-push("patient_app_id", patient_app_id);
-push("medecin_id", medecin_id);
+    push("patient_app_id", patient_app_id);
+    push("medecin_id", medecin_id);
 
-if (consultation_id) push("consultation_id", consultation_id);
+    if (consultation_id) push("consultation_id", consultation_id);
 
-push("nom", type_analyse);
-push("type_analyse", type_analyse);
-if (date_analyse) push("date_analyse", date_analyse);
+    push("nom", type_analyse);
+    push("type_analyse", type_analyse);
+    if (date_analyse) push("date_analyse", date_analyse);
 
-push("contenu", remarque);
-push("remarque", remarque);
+    push("contenu", remarque);
+    push("remarque", remarque);
 
-    
+    if (laboratoire) push("laboratoire", laboratoire);
+    if (date_resultat) push("date_resultat", date_resultat);
+    if (conclusion) push("conclusion", conclusion);
+
     if (req.file) {
       const savedPath = `/uploads/${req.file.filename}`;
       const fileCol = firstExisting(cols, ["chemin_fichier", "fichier", "file", "path", "url", "contenu"]);
@@ -986,7 +994,6 @@ push("remarque", remarque);
     res.status(500).json({ error: err.message });
   }
 });
-
 app.delete("/analyses/:id", authRequired, async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -1035,7 +1042,7 @@ app.get("/patients/:id/imagerie", authRequired, staff, async (req, res) => {
   }
 });
 
-app.post("/imagerie", authRequired, staff, upload.single("file"), async (req, res) => {
+app.post("/imagerie", authRequired, medecinOrAdmin, upload.single("file"), async (req, res) => {
   try {
     const patient_id = req.body?.patient_id ? Number(req.body.patient_id) : null;
     const type_imagerie = req.body?.type_imagerie || null;
@@ -1121,7 +1128,7 @@ app.get("/patients/:id/ordonnances", authRequired, staff, async (req, res) => {
   }
 });
 
-app.post("/ordonnances", authRequired, staff, upload.single("file"), async (req, res) => {
+app.post("/ordonnances", authRequired,medecinOrAdmin, upload.single("file"), async (req, res) => {
   try {
     const patient_id = req.body?.patient_id ? Number(req.body.patient_id) : null;
     const titre = req.body?.titre || "Ordonnance";
@@ -1216,7 +1223,7 @@ app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
 
 // ⬇️ AJOUTE LA NOUVELLE ROUTE ICI ⬇️
 
-app.post("/patients/:id/documents", authRequired, staff, async (req, res) => {
+app.post("/patients/:id/documents", authRequired, medecinOrAdmin, async (req, res) => {
   const { id } = req.params;
   const { titre, nom, contenu } = req.body;
 
@@ -1303,6 +1310,26 @@ app.get("/parametres", async (req, res) => {
     const r = await pool.query("SELECT * FROM parametres ORDER BY id ASC LIMIT 1");
     if (r.rows.length === 0) return res.json({});
     res.json(r.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.get("/cabinets", async (req, res) => {
+  try {
+    const { ville } = req.query;
+
+    let query = "SELECT id, nom, ville FROM cabinets";
+    let params = [];
+
+    if (ville) {
+      query += " WHERE ville=$1";
+      params.push(ville);
+    }
+
+    query += " ORDER BY nom";
+
+    const r = await pool.query(query, params);
+    res.json(r.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1635,7 +1662,7 @@ app.post("/rdv", async (req, res) => {
       notes,
     } = req.body;
 
-    const cabinet_id = 1;
+    const cabinet_id = Number(req.body.cabinet_id) || 1;
   
    
     // Date/heure facultatives pour demande mobile
@@ -2217,7 +2244,73 @@ res.status(500).json({ error: err.message });
   }
 });
 
+app.post("/create-cabinet", async (req, res) => {
+  try {
+    const {
+      nom_cabinet,
+      nom_medecin,
+      telephone,
+      adresse,
+      email,
+      password,
+    } = req.body || {};
 
+    if (!nom_cabinet || !nom_medecin || !email || !password) {
+      return res.status(400).json({
+        error: "nom_cabinet, nom_medecin, email et password sont obligatoires",
+      });
+    }
+
+    const emailCheck = await pool.query(
+      `SELECT id FROM medecins WHERE email = $1 LIMIT 1`,
+      [String(email).trim().toLowerCase()]
+    );
+
+    if (emailCheck.rows.length > 0) {
+      return res.status(409).json({ error: "Email déjà utilisé" });
+    }
+
+    const cabinetInsert = await pool.query(
+      `
+      INSERT INTO cabinets (nom, adresse, telephone)
+      VALUES ($1, $2, $3)
+      RETURNING id, nom, adresse, telephone
+      `,
+      [
+        String(nom_cabinet).trim(),
+        adresse ? String(adresse).trim() : null,
+        telephone ? String(telephone).trim() : null,
+      ]
+    );
+
+    const cabinet = cabinetInsert.rows[0];
+    const password_hash = await bcrypt.hash(String(password), 10);
+
+    const userInsert = await pool.query(
+      `
+      INSERT INTO medecins (nom, email, password_hash, role, is_active, cabinet_id)
+      VALUES ($1, $2, $3, $4, TRUE, $5)
+      RETURNING id, nom, email, role, is_active, cabinet_id
+      `,
+      [
+        String(nom_medecin).trim(),
+        String(email).trim().toLowerCase(),
+        password_hash,
+        "admin",
+        cabinet.id,
+      ]
+    );
+
+    return res.json({
+      ok: true,
+      message: "Cabinet créé avec succès",
+      cabinet,
+      admin: userInsert.rows[0],
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
 // PUT /users/:id (modifier)
 app.put("/users/:id", authRequired, requireAdmin, async (req, res) => {
   try {
@@ -2332,7 +2425,7 @@ app.delete("/documents/:id", authRequired, staff, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.post("/documents/:id/classer-analyse", authRequired, staff, async (req, res) => {
+app.post("/documents/:id/classer-analyse", authRequired, medecinOrAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -2536,7 +2629,114 @@ app.get("/posologie", async (req,res)=>{
 })
 
 
+app.get("/test-backend", (req, res) => {
+  console.log("TEST BACKEND OK");
+  res.json({ ok: true });
+});
+// =============================
+// ASSISTANT INTELLIGENT PATIENT
+// =============================
+app.get("/patients/:id/assistant-summary", authRequired, staff, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
 
+    const patient = await pool.query(
+      "SELECT nom, prenom FROM patients WHERE id=$1",
+      [id]
+    );
+
+    const allergies = await pool.query(
+      "SELECT nom FROM allergies WHERE patient_id=$1",
+      [id]
+    );
+
+    const lastConsult = await pool.query(
+      "SELECT date_consultation FROM consultations WHERE patient_id=$1 ORDER BY date_consultation DESC LIMIT 1",
+      [id]
+    );
+
+    const lastAnalyse = await pool.query(
+      "SELECT type_analyse FROM analyses WHERE patient_id=$1 ORDER BY id DESC LIMIT 1",
+      [id]
+    );
+
+   const ordonnances = await pool.query(
+  "SELECT created_at FROM ordonnances WHERE patient_id=$1 ORDER BY created_at DESC LIMIT 1",
+  [id]
+);
+
+const lastOrdonnance = ordonnances.rows[0]?.created_at || null;
+
+res.json({
+  patient: patient.rows[0] || null,
+  allergies: allergies.rows,
+  lastConsultation: lastConsult.rows[0] || null,
+  lastAnalyse: lastAnalyse.rows[0] || null,
+  lastOrdonnance
+});
+
+    const alerts = [];
+
+    if (allergies.rows.length > 0) {
+      alerts.push("Allergies enregistrées");
+    }
+
+    if (lastAnalyse.rows.length === 0) {
+      alerts.push("Aucune analyse récente");
+    }
+
+    res.json({
+      patient: patient.rows[0] || null,
+      allergies: allergies.rows,
+      lastConsultation: lastConsult.rows[0] || null,
+      lastAnalyse: lastAnalyse.rows[0] || null,
+      lastOrdonnance: lastOrdonnance.rows[0] || null,
+      alerts
+    });
+
+  } catch (err) {
+    console.log("ASSISTANT ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+app.get("/rdv-mobile", async (req, res) => {
+  try {
+    const { statut } = req.query;
+
+    let sql = `
+      SELECT
+        r.id,
+        p.nom AS patient_nom,
+        p.prenom AS patient_prenom,
+        p.telephone AS patient_telephone,
+        r.date_rdv,
+        r.heure,
+        r.duree_minutes,
+        r.motif,
+        r.statut,
+        r.created_at
+      FROM rdv r
+      LEFT JOIN patients p ON p.id = r.patient_id
+    `;
+
+    const params = [];
+
+    if (statut) {
+      sql += ` WHERE r.statut = $1`;
+      params.push(statut);
+    }
+
+    sql += ` ORDER BY r.created_at DESC`;
+
+    const result = await pool.query(sql, params);
+
+    res.json(result.rows);
+
+  } catch (err) {
+    console.log("ERREUR RDV MOBILE:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
