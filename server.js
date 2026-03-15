@@ -1318,7 +1318,7 @@ app.get("/cabinets", async (req, res) => {
   try {
     const { ville } = req.query;
 
-    let query = "SELECT id, nom, ville FROM cabinets";
+    let query = "SELECT id, nom, ville, telephone FROM cabinets";
     let params = [];
 
     if (ville) {
@@ -1334,27 +1334,7 @@ app.get("/cabinets", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.post("/cabinets", async (req, res) => {
-  try {
-    const { nom, adresse, telephone, ville } = req.body;
 
-    if (!nom || !ville) {
-      return res.status(400).json({ error: "Nom et ville obligatoires" });
-    }
-
-    const result = await pool.query(
-      `INSERT INTO cabinets (nom, adresse, telephone, ville)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
-      [nom, adresse || "", telephone || "", ville]
-    );
-
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error("Erreur création cabinet:", err);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
 app.put("/parametres", async (req, res) => {
   try {
     const id = await ensureParametresRow();
