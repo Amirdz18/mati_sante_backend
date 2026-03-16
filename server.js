@@ -2723,6 +2723,7 @@ c.nom AS cabinet_nom
 FROM rendez_vous r
 LEFT JOIN cabinets c ON c.id = r.cabinet_id
 WHERE r.statut != 'annule'
+ORDER BY r.created_at DESC
 
     `;
 
