@@ -1448,6 +1448,27 @@ app.post("/patient/message", async (req, res) => {
     res.status(500).json({ error: "erreur serveur" });
   }
 });
+app.get("/patient/:id/messages", async (req, res) => {
+  try {
+    const patient_id = req.params.id;
+
+    const r = await pool.query(
+      `SELECT *
+       FROM messages_patient
+       WHERE patient_id = $1
+       ORDER BY created_at DESC`,
+      [patient_id]
+    );
+
+    res.json({
+      success: true,
+      messages: r.rows
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "erreur serveur" });
+  }
+});
 
 
 app.post("/documents", upload.single("file"), async (req, res) => {
