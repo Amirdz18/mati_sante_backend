@@ -303,11 +303,13 @@ app.post("/auth/login", async (req, res) => {
 // PATIENT REGISTER
 app.post("/patient/register", async (req, res) => {
   try {
-    const { nom, prenom, telephone, email, password } = req.body;
+    const { nom, prenom, telephone, email, password, cabinet_id } = req.body;
 
-    if (!telephone || !password) {
-      return res.status(400).json({ error: "telephone et password requis" });
-    }
+
+    if (!telephone || !password || !cabinet_id) {
+  return res.status(400).json({ error: "telephone, password et cabinet_id requis" });
+}
+
 
     const exist = await pool.query(
       "SELECT id FROM patients WHERE telephone=$1 OR email=$2",
@@ -320,11 +322,12 @@ app.post("/patient/register", async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
 
-    const r = await pool.query(
+   const r = await pool.query(
   `INSERT INTO patients(nom, prenom, telephone, email, password_hash, cabinet_id)
-   VALUES($1,$2,$3,$4,$5,NULL) RETURNING id, patient_app_id`,
-  [nom, prenom, telephone, email, hash]
+   VALUES($1,$2,$3,$4,$5,$6) RETURNING id, patient_app_id`,
+  [nom, prenom, telephone, email, hash, cabinet_id]
 );
+
 
     res.json({ success: true, patient: r.rows[0] });
 
