@@ -425,14 +425,13 @@ app.get("/patient/:id/rdv", async (req, res) => {
     const patient_id = req.params.id;
 
     const r = await pool.query(
-      `SELECT rdv.*, medecins.nom as medecin_nom
-       FROM rendezvous rdv
-       LEFT JOIN medecins ON medecins.id = rdv.medecin_id
-       WHERE rdv.patient_id=$1
-       ORDER BY date_rdv DESC`,
-      [patient_id]
-    );
-
+`SELECT r.*, m.nom as medecin_nom
+ FROM rdv r
+ LEFT JOIN medecins m ON m.id = r.medecin_id
+ WHERE r.patient_id = $1
+ ORDER BY r.date DESC`,
+[patient_id]
+);
     res.json({
       success: true,
       rdv: r.rows
