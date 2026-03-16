@@ -442,6 +442,28 @@ app.get("/patient/:id/rdv", async (req, res) => {
     res.status(500).json({ error: "erreur serveur" });
   }
 });
+app.get("/patient/:id/documents", async (req, res) => {
+  try {
+    const patient_id = req.params.id;
+
+    const r = await pool.query(
+      `SELECT *
+       FROM documents
+       WHERE patient_id = $1
+       ORDER BY created_at DESC`,
+      [patient_id]
+    );
+
+    res.json({
+      success: true,
+      documents: r.rows
+    });
+
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "erreur serveur" });
+  }
+});
 // /auth/me => retourne le user du token
 app.get("/auth/me", authRequired, (req, res) => {
   return res.json({ ok: true, user: req.user });
