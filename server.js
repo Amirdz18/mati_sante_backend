@@ -2253,7 +2253,7 @@ console.log("✅ Job rappel 2h actif (toutes les 60s)");
 // Protégé par JWT: authRequired
 // =========================================================
 
-const bcrypt = require("bcrypt");
+
 
 // Petit helper: est-ce admin ?
 function requireAdmin(req, res, next) {
