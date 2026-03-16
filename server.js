@@ -2709,19 +2709,21 @@ app.get("/rdv-mobile", async (req, res) => {
 
     let sql = `
       SELECT
-        id,
-        patient_nom,
-        patient_prenom,
-        patient_telephone,
-        date_rdv,
-        heure_debut,
-        heure_fin,
-        motif,
-        statut,
-        notes,
-        created_at
-      FROM rendez_vous
-      WHERE 1=1
+r.id,
+r.patient_nom,
+r.patient_prenom,
+r.patient_telephone,
+r.date_rdv,
+r.heure_debut,
+r.heure_fin,
+r.motif,
+r.statut,
+r.notes,
+c.nom AS cabinet_nom
+FROM rendez_vous r
+LEFT JOIN cabinets c ON c.id = r.cabinet_id
+WHERE r.statut != 'annule'
+
     `;
 
     const params = [];
