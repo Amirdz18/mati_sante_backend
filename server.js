@@ -425,13 +425,13 @@ app.get("/patient/:id/rdv", async (req, res) => {
     const patient_id = req.params.id;
 
     const r = await pool.query(
-`SELECT r.*, m.nom as medecin_nom
- FROM rendezvous r
- LEFT JOIN medecins m ON m.id = r.medecin_id
- WHERE r.patient_id = $1
- ORDER BY r.date_rdv DESC`,
-[patient_id]
-);
+    `SELECT *
+     FROM rendez_vous
+     WHERE patient_id = $1
+     ORDER BY date_rdv DESC`,
+    [patient_id]
+    );
+
     res.json({
       success: true,
       rdv: r.rows
@@ -442,7 +442,6 @@ app.get("/patient/:id/rdv", async (req, res) => {
     res.status(500).json({ error: "erreur serveur" });
   }
 });
-
 // /auth/me => retourne le user du token
 app.get("/auth/me", authRequired, (req, res) => {
   return res.json({ ok: true, user: req.user });
