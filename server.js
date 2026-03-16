@@ -299,6 +299,84 @@ app.post("/auth/login", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+// PATIENT REGISTER
+app.post("/patient/register", async (req, res) => {
+  try {
+    const { nom, prenom, telephone, email, password } = req.body;
+
+    if (!telephone || !password) {
+      return res.status(400).json({ error: "telephone et password requis" });
+    }
+
+    const exist = await pool.query(
+      "SELECT id FROM patients WHERE telephone=$1 OR email=$2",
+      [telephone, email]
+    );
+
+    if (exist.rows.length > 0) {
+      return res.status(400).json({ error: "patient existe déjà" });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+
+    const r = await pool.query(
+      `INSERT INTO patients(nom, prenom, telephone, email, password_hash)
+       VALUES($1,$2,$3,$4,$5) RETURNING id, patient_app_id`,
+      [nom, prenom, telephone, email, hash]
+    );
+
+    res.json({ success: true, patient: r.rows[0] });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "erreur serveur" });
+  }
+});
+
+
+// PATIENT LOGIN
+app.post("/patient/login", async (req, res) => {
+  try {
+    const { telephone, password } = req.body;
+
+    const r = await pool.query(
+      "SELECT id, nom, prenom, password_hash, patient_app_id FROM patients WHERE telephone=$1",
+      [telephone]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(401).json({ error: "patient introuvable" });
+    }
+
+    const patient = r.rows[0];
+
+    const ok = await bcrypt.compare(password, patient.password_hash);
+
+    if (!ok) {
+      return res.status(401).json({ error: "mot de passe incorrect" });
+    }
+
+    const token = jwt.sign(
+      { patient_id: patient.id },
+      JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+
+    res.json({
+      token,
+      patient: {
+        id: patient.id,
+        nom: patient.nom,
+        prenom: patient.prenom,
+        patient_app_id: patient.patient_app_id
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "erreur serveur" });
+  }
+});
 
 // /auth/me => retourne le user du token
 app.get("/auth/me", authRequired, (req, res) => {
