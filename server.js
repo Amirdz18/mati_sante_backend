@@ -2748,6 +2748,27 @@ app.get("/rdv-mobile", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.put("/rdv-mobile/:id/annuler", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const r = await pool.query(
+      `UPDATE rendez_vous
+       SET statut = 'annule', updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, statut`,
+      [id]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: "RDV introuvable" });
+    }
+
+    res.json(r.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 app.listen(PORT, () => {
