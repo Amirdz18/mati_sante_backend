@@ -426,10 +426,10 @@ app.get("/patient/:id/rdv", async (req, res) => {
 
     const r = await pool.query(
 `SELECT r.*, m.nom as medecin_nom
- FROM rdv r
+ FROM rendezvous r
  LEFT JOIN medecins m ON m.id = r.medecin_id
  WHERE r.patient_id = $1
- ORDER BY r.date DESC`,
+ ORDER BY r.date_rdv DESC`,
 [patient_id]
 );
     res.json({
