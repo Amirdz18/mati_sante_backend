@@ -338,6 +338,44 @@ app.post("/patient/register", async (req, res) => {
 });
 
 
+app.post("/patient/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const r = await pool.query(
+      "SELECT * FROM patients WHERE email=$1",
+      [email]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(401).json({ error: "patient introuvable" });
+    }
+
+    const patient = r.rows[0];
+
+    const ok = await bcrypt.compare(password, patient.password_hash);
+
+    if (!ok) {
+      return res.status(401).json({ error: "mot de passe incorrect" });
+    }
+
+    res.json({
+      success: true,
+      patient: {
+        id: patient.id,
+        nom: patient.nom,
+        prenom: patient.prenom,
+        email: patient.email,
+        cabinet_id: patient.cabinet_id
+      }
+    });
+
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "erreur serveur" });
+  }
+});
+
 // PATIENT LOGIN
 app.post("/patient/login", async (req, res) => {
   try {
