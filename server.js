@@ -1318,7 +1318,8 @@ app.get("/cabinets", async (req, res) => {
   try {
     const { ville } = req.query;
 
-    let query = "SELECT id, nom, ville, telephone FROM cabinets";
+    let query = "SELECT id, nom, ville, telephone, adresse, specialite, photo FROM cabinets";
+
     let params = [];
 
     if (ville) {
