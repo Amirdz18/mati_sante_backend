@@ -2709,37 +2709,37 @@ app.get("/rdv-mobile", async (req, res) => {
 
     let sql = `
       SELECT
-r.id,
-r.patient_nom,
-r.patient_prenom,
-r.patient_telephone,
-r.date_rdv,
-r.heure_debut,
-r.heure_fin,
-r.motif,
-r.statut,
-r.notes,
-c.nom AS cabinet_nom
-FROM rendez_vous r
-LEFT JOIN cabinets c ON c.id = r.cabinet_id
-WHERE r.statut != 'annule'
-ORDER BY r.created_at DESC
-
+        r.id,
+        r.patient_nom,
+        r.patient_prenom,
+        r.patient_telephone,
+        r.date_rdv,
+        r.heure_debut,
+        r.heure_fin,
+        r.motif,
+        r.statut,
+        r.notes,
+        r.created_at,
+        c.nom AS cabinet_nom
+      FROM rendez_vous r
+      LEFT JOIN cabinets c ON c.id = r.cabinet_id
+      WHERE 1=1
+        AND r.statut != 'annule'
     `;
 
     const params = [];
 
     if (statut) {
-      params.push(statut);
-      sql += ` AND statut = $${params.length}`;
+      params.push(String(statut).trim());
+      sql += ` AND r.statut = $${params.length}`;
     }
 
     if (telephone) {
       params.push(String(telephone).trim());
-      sql += ` AND patient_telephone = $${params.length}`;
+      sql += ` AND r.patient_telephone = $${params.length}`;
     }
 
-    sql += ` ORDER BY created_at DESC`;
+    sql += ` ORDER BY r.created_at DESC`;
 
     const result = await pool.query(sql, params);
     res.json(result.rows);
