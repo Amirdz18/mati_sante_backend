@@ -321,10 +321,10 @@ app.post("/patient/register", async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
 
     const r = await pool.query(
-      `INSERT INTO patients(nom, prenom, telephone, email, password_hash)
-       VALUES($1,$2,$3,$4,$5) RETURNING id, patient_app_id`,
-      [nom, prenom, telephone, email, hash]
-    );
+  `INSERT INTO patients(nom, prenom, telephone, email, password_hash, cabinet_id)
+   VALUES($1,$2,$3,$4,$5,NULL) RETURNING id, patient_app_id`,
+  [nom, prenom, telephone, email, hash]
+);
 
     res.json({ success: true, patient: r.rows[0] });
 
