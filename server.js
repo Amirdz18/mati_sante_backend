@@ -1420,6 +1420,35 @@ app.post("/patients/:id/documents", authRequired, medecinOrAdmin, async (req, re
     res.status(500).json({ error: err.message });
   }
 });
+app.post("/patient/message", async (req, res) => {
+  try {
+    const {
+      patient_id,
+      cabinet_id,
+      expediteur_type,
+      expediteur_id,
+      message,
+      document_id
+    } = req.body;
+
+    const r = await pool.query(
+      `INSERT INTO messages_patient
+       (patient_id, cabinet_id, expediteur_type, expediteur_id, message, document_id)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       RETURNING *`,
+      [patient_id, cabinet_id, expediteur_type, expediteur_id, message, document_id || null]
+    );
+
+    res.json({
+      success: true,
+      message: r.rows[0]
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "erreur serveur" });
+  }
+});
+
 
 app.post("/documents", upload.single("file"), async (req, res) => {
   try {
