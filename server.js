@@ -526,9 +526,9 @@ const staff = requireRole("secretaire", "medecin", "admin");
 app.get("/patients", authRequired, staff, async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM patients WHERE cabinet_id=$1 ORDER BY id DESC",
-      [req.user.cabinet_id]
-    );
+  "SELECT * FROM patients WHERE cabinet_id=$1 AND is_mobile_account = false ORDER BY id DESC",
+  [req.user.cabinet_id]
+);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
