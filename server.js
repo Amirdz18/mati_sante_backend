@@ -3028,7 +3028,7 @@ app.get("/rdv-mobile", async (req, res) => {
       FROM rendez_vous r
       LEFT JOIN cabinets c ON c.id = r.cabinet_id
       WHERE 1=1
-        AND r.statut != 'annule'
+      AND r.statut != 'annule'
     `;
 
     const params = [];
@@ -3047,6 +3047,7 @@ app.get("/rdv-mobile", async (req, res) => {
 
     const result = await pool.query(sql, params);
     res.json(result.rows);
+
   } catch (err) {
     console.log("ERREUR RDV MOBILE:", err);
     res.status(500).json({ error: err.message });
