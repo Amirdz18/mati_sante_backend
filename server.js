@@ -904,6 +904,18 @@ app.delete("/antecedents/:id", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.delete("/messages/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await db.query("DELETE FROM messages WHERE id = $1", [id]);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("DELETE MESSAGE ERROR:", err);
+    res.status(500).json({ error: "Erreur suppression message" });
+  }
+});
 
 /* =========================================================
    ==================== CONSULTATIONS =======================
