@@ -323,8 +323,8 @@ app.post("/patient/register", async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
 
    const r = await pool.query(
-  `INSERT INTO patients(nom, prenom, telephone, email, password_hash, cabinet_id)
-   VALUES($1,$2,$3,$4,$5,$6) RETURNING id, patient_app_id`,
+  `INSERT INTO patients(nom, prenom, telephone, email, password_hash, cabinet_id, is_mobile_account)
+   VALUES($1,$2,$3,$4,$5,$6,true) RETURNING id, patient_app_id`,
   [nom, prenom, telephone, email, hash, cabinet_id]
 );
 
@@ -525,7 +525,7 @@ const staff = requireRole("secretaire", "medecin", "admin");
 // LIST
 app.get("/patients", authRequired, staff, async (req, res) => {
   try {
-    const result = await pool.query(
+   const result = await pool.query(
   "SELECT * FROM patients WHERE cabinet_id=$1 AND is_mobile_account = false ORDER BY id DESC",
   [req.user.cabinet_id]
 );
@@ -2723,7 +2723,9 @@ app.get("/rdv-demandes", authRequired, async (req, res) => {
 /* ================= DASHBOARD ================= */
 app.get("/dashboard/stats", async (req, res) => {
   try {
-    const patients = await pool.query("SELECT COUNT(*) FROM patients");
+    const patients = await pool.query(
+  "SELECT COUNT(*) FROM patients WHERE is_mobile_account = false"
+);
     const consultations = await pool.query(
       "SELECT COUNT(*) FROM consultations WHERE date_consultation = CURRENT_DATE"
     );
