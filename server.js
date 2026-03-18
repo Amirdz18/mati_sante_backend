@@ -908,7 +908,7 @@ app.delete("/messages/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
-    await db.query("DELETE FROM messages WHERE id = $1", [id]);
+    await pool.query("DELETE FROM messages WHERE id = $1", [id]);
 
     res.json({ success: true });
   } catch (err) {
