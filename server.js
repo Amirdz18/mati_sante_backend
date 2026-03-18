@@ -2803,7 +2803,7 @@ app.get("/rdv-demandes", authRequired, async (req, res) => {
 app.get("/dashboard/stats", async (req, res) => {
   try {
     const patients = await pool.query(
-  "SELECT COUNT(*) FROM patients WHERE is_mobile_account = false"
+  "SELECT COUNT(*) FROM patients WHERE is_mobile_account = false AND actif = true"
 );
     const consultations = await pool.query(
       "SELECT COUNT(*) FROM consultations WHERE date_consultation = CURRENT_DATE"
