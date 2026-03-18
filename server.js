@@ -305,32 +305,43 @@ app.post("/patient/register", async (req, res) => {
   try {
     const { nom, prenom, telephone, email, password, cabinet_id } = req.body;
 
-
     if (!telephone || !password || !cabinet_id) {
-  return res.status(400).json({ error: "telephone, password et cabinet_id requis" });
-}
-
+      return res.status(400).json({ error: "telephone, password et cabinet_id requis" });
+    }
 
     const exist = await pool.query(
-      "SELECT id FROM patients WHERE telephone=$1 OR email=$2",
+      "SELECT * FROM patients WHERE telephone=$1 OR email=$2 LIMIT 1",
       [telephone, email]
     );
 
-    if (exist.rows.length > 0) {
-      return res.status(400).json({ error: "patient existe déjà" });
-    }
-
     const hash = await bcrypt.hash(password, 10);
 
-   const r = await pool.query(
-  `INSERT INTO patients(nom, prenom, telephone, email, password_hash, cabinet_id, is_mobile_account)
-   VALUES($1,$2,$3,$4,$5,$6,true) RETURNING id, patient_app_id`,
-  [nom, prenom, telephone, email, hash, cabinet_id]
-);
+    if (exist.rows.length > 0) {
+      const patient = exist.rows[0];
 
+      const updated = await pool.query(
+        `UPDATE patients
+         SET nom = COALESCE($1, nom),
+             prenom = COALESCE($2, prenom),
+             telephone = $3,
+             email = $4,
+             password_hash = $5
+         WHERE id = $6
+         RETURNING id, patient_app_id`,
+        [nom, prenom, telephone, email, hash, patient.id]
+      );
+
+      return res.json({ success: true, patient: updated.rows[0] });
+    }
+
+    const r = await pool.query(
+      `INSERT INTO patients(nom, prenom, telephone, email, password_hash, cabinet_id, is_mobile_account)
+       VALUES($1,$2,$3,$4,$5,$6,true)
+       RETURNING id, patient_app_id`,
+      [nom, prenom, telephone, email, hash, cabinet_id]
+    );
 
     res.json({ success: true, patient: r.rows[0] });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "erreur serveur" });
