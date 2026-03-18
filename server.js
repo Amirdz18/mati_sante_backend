@@ -1827,8 +1827,8 @@ app.get("/rdv", authRequired, async (req, res) => {
       FROM rendez_vous rv
       LEFT JOIN patients p ON p.id = rv.patient_id
       WHERE rv.cabinet_id = $2
-        AND ($1::date IS NULL OR rv.date_rdv::date = $1::date)
-      ORDER BY rv.heure_debut ASC
+AND rv.statut IN ('prevu','confirme')
+AND ($1::date IS NULL OR rv.date_rdv::date = $1::date)
       `,
       [date, req.user.cabinet_id]
     );
