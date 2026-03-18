@@ -601,9 +601,13 @@ app.post("/patients", authRequired, staff, async (req, res) => {
     }
 
     // Si téléphone ou email existe déjà ET actif=true => erreur
-    if (existingPhone && existingPhone.actif === true) {
-      return res.status(409).json({ error: "Un patient avec ce téléphone existe déjà" });
-    }
+    if (
+  existingPhone &&
+  existingPhone.actif === true &&
+  existingPhone.is_mobile_account === false
+) {
+  return res.status(409).json({ error: "Un patient avec ce téléphone existe déjà" });
+}
 
     if (existingEmail && existingEmail.actif === true) {
       return res.status(409).json({ error: "Un patient avec cet email existe déjà" });
