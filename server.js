@@ -686,7 +686,11 @@ if (req.body.email && String(req.body.email).trim() !== "") {
 app.delete("/patients/:id", authRequired, medecinOrAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const r = await pool.query("DELETE FROM patients WHERE id=$1 RETURNING id", [id]);
+    const r = await pool.query(
+  "UPDATE patients SET actif = false WHERE id=$1 RETURNING id",
+  [id]
+);
+
     if (r.rows.length === 0) return res.status(404).json({ error: "Patient introuvable" });
     res.json({ ok: true, message: "Patient supprimé ✅" });
   } catch (err) {
