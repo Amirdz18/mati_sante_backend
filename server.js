@@ -340,10 +340,15 @@ app.post("/patient/register", async (req, res) => {
 
 app.post("/patient/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const password = String(req.body.password || "");
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "email et password requis" });
+    }
 
     const r = await pool.query(
-      "SELECT * FROM patients WHERE email=$1",
+      "SELECT * FROM patients WHERE LOWER(TRIM(email)) = $1 LIMIT 1",
       [email]
     );
 
@@ -352,7 +357,6 @@ app.post("/patient/login", async (req, res) => {
     }
 
     const patient = r.rows[0];
-
     const ok = await bcrypt.compare(password, patient.password_hash);
 
     if (!ok) {
@@ -366,15 +370,16 @@ app.post("/patient/login", async (req, res) => {
         nom: patient.nom,
         prenom: patient.prenom,
         email: patient.email,
+        telephone: patient.telephone,
         cabinet_id: patient.cabinet_id
       }
     });
-
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "erreur serveur" });
   }
 });
+
 
 // PATIENT LOGIN
 app.post("/patient/login", async (req, res) => {
