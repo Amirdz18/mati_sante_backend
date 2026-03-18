@@ -3074,6 +3074,30 @@ app.put("/rdv-mobile/:id/annuler", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.get("/messages", authRequired, staff, async (req, res) => {
+  try {
+    const { patient_id } = req.query;
+
+    if (!patient_id) {
+      return res.status(400).json({ error: "patient_id requis" });
+    }
+
+    const r = await pool.query(
+      `
+      SELECT *
+      FROM messages
+      WHERE patient_id = $1 AND cabinet_id = $2
+      ORDER BY created_at ASC
+      `,
+      [patient_id, req.user.cabinet_id]
+    );
+
+    res.json(r.rows);
+  } catch (err) {
+    console.log("GET /messages ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 app.listen(PORT, () => {
