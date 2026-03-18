@@ -904,18 +904,30 @@ app.delete("/antecedents/:id", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.delete("/messages/:id", async (req, res) => {
-  const { id } = req.params;
+app.delete("/messages/:id", authRequired, staff, async (req, res) => {
+  const id = Number(req.params.id);
+
+  if (!id) {
+    return res.status(400).json({ error: "id message invalide" });
+  }
 
   try {
-    await pool.query("DELETE FROM messages WHERE id = $1", [id]);
+    const r = await pool.query(
+      "DELETE FROM messages WHERE id = $1 AND cabinet_id = $2 RETURNING *",
+      [id, req.user.cabinet_id]
+    );
 
-    res.json({ success: true });
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: "Message introuvable" });
+    }
+
+    return res.json({ success: true, deleted: r.rows[0] });
   } catch (err) {
-    console.error("DELETE MESSAGE ERROR:", err);
-    res.status(500).json({ error: "Erreur suppression message" });
+    console.error("DELETE MESSAGE ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
+
 
 /* =========================================================
    ==================== CONSULTATIONS =======================
