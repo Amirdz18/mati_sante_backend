@@ -3098,7 +3098,29 @@ app.get("/messages", authRequired, staff, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.post("/messages", authRequired, staff, async (req, res) => {
+  try {
+    const { patient_id, contenu } = req.body;
 
+    if (!patient_id || !contenu) {
+      return res.status(400).json({ error: "patient_id et contenu requis" });
+    }
+
+    const r = await pool.query(
+      `
+      INSERT INTO messages (patient_id, cabinet_id, contenu, sender)
+      VALUES ($1, $2, $3, 'medecin')
+      RETURNING *
+      `,
+      [patient_id, req.user.cabinet_id, contenu]
+    );
+
+    res.json(r.rows[0]);
+  } catch (err) {
+    console.log("POST /messages ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
