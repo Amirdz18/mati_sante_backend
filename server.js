@@ -600,7 +600,7 @@ app.post("/patients", authRequired, staff, async (req, res) => {
       }
     }
 
-    // Si existe déjà actif → erreur
+    // Si téléphone ou email existe déjà ET actif=true => erreur
     if (existingPhone && existingPhone.actif === true) {
       return res.status(409).json({ error: "Un patient avec ce téléphone existe déjà" });
     }
@@ -609,7 +609,7 @@ app.post("/patients", authRequired, staff, async (req, res) => {
       return res.status(409).json({ error: "Un patient avec cet email existe déjà" });
     }
 
-    // Si existe mais inactif → réactiver
+    // Si patient existe mais inactif => réactiver
     const existingInactive = existingPhone || existingEmail;
 
     if (existingInactive && existingInactive.actif === false) {
@@ -627,8 +627,10 @@ app.post("/patients", authRequired, staff, async (req, res) => {
           email = $9,
           groupe_sanguin = $10,
           patient_app_id = $11,
-          actif = true
-        WHERE id = $12
+          actif = true,
+          is_mobile_account = false,
+          cabinet_id = $12
+        WHERE id = $13
         RETURNING *
       `;
 
@@ -644,6 +646,7 @@ app.post("/patients", authRequired, staff, async (req, res) => {
         email || null,
         groupe_sanguin || null,
         patient_app_id || null,
+        req.user.cabinet_id,
         existingInactive.id,
       ]);
 
@@ -687,7 +690,6 @@ app.post("/patients", authRequired, staff, async (req, res) => {
     );
 
     return res.json(r2.rows[0]);
-
   } catch (err) {
     console.log("POST /patients ERROR:", err.message);
     if (err.code === "23505") {
@@ -697,6 +699,7 @@ app.post("/patients", authRequired, staff, async (req, res) => {
   }
 });
 
+
 // UPDATE
 app.put("/patients/:id", authRequired, medecinOrAdmin, async (req, res) => {
   try {
@@ -704,7 +707,8 @@ app.put("/patients/:id", authRequired, medecinOrAdmin, async (req, res) => {
     const cur = await pool.query("SELECT * FROM patients WHERE id=$1", [id]);
     if (cur.rows.length === 0) return res.status(404).json({ error: "Patient introuvable" });
     if (req.body.telephone && String(req.body.telephone).trim() !== "") {
-  const existingPhone = await pool.query(
+   
+      const existingPhone = await pool.query(
     "SELECT id FROM patients WHERE telephone=$1 AND cabinet_id=$2 AND id<>$3 LIMIT 1",
     [req.body.telephone, req.user.cabinet_id, id]
   );
