@@ -1424,8 +1424,10 @@ app.get("/patients/:id/ordonnances", authRequired, staff, async (req, res) => {
   }
 });
 
-app.post("/ordonnances", authRequired,medecinOrAdmin, upload.single("file"), async (req, res) => {
+app.post("/ordonnances", authRequired, medecinOrAdmin, upload.single("file"), async (req, res) => {
   try {
+    const cols = await getTableColumns("ordonnances");
+
     const patient_id = req.body?.patient_id ? Number(req.body.patient_id) : null;
     const titre = req.body?.titre || "Ordonnance";
     const contenu =
@@ -1450,11 +1452,38 @@ app.post("/ordonnances", authRequired,medecinOrAdmin, upload.single("file"), asy
       return res.status(404).json({ error: "Patient introuvable" });
     }
 
+    const fichierPath = req.file ? `/uploads/${req.file.filename}` : null;
+
+    const insertCols = [];
+    const insertVals = [];
+    const params = [];
+
+    const push = (col, val) => {
+      if (!cols.has(col)) return;
+      insertCols.push(col);
+      params.push(val);
+      insertVals.push(`$${params.length}`);
+    };
+
+    push("patient_id", patient_id);
+    push("titre", titre);
+    push("contenu", contenu);
+
+    if (fichierPath) {
+      const fileCol = firstExisting(cols, ["fichier", "chemin_fichier", "file", "url", "path"]);
+      if (fileCol) push(fileCol, fichierPath);
+    }
+
+    if (insertCols.length === 0) {
+      return res.status(400).json({ error: "Aucune colonne compatible trouvée dans ordonnances" });
+    }
+
     const result = await pool.query(
-      `INSERT INTO ordonnances (patient_id, titre, contenu)
-       VALUES ($1,$2,$3)
-       RETURNING *`,
-      [patient_id, titre, contenu]
+      `INSERT INTO ordonnances (${insertCols.join(", ")})
+       VALUES (${insertVals.join(", ")})
+       RETURNING *`
+      ,
+      params
     );
 
     res.json(result.rows[0]);
@@ -1462,6 +1491,8 @@ app.post("/ordonnances", authRequired,medecinOrAdmin, upload.single("file"), asy
     console.log("ORDONNANCE ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
+
+
 });
 app.post("/documents/send-existing-file", authRequired, medecinOrAdmin, async (req, res) => {
   try {
