@@ -3407,6 +3407,47 @@ app.get("/patient/:id/home-stats", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+app.get("/patient/:id/conversations", async (req, res) => {
+  try {
+    const patient_id = Number(req.params.id);
+
+    if (!patient_id) {
+      return res.status(400).json({ error: "patient_id invalide" });
+    }
+
+    const patient = await pool.query(
+      "SELECT id FROM patients WHERE id = $1 LIMIT 1",
+      [patient_id]
+    );
+
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
+    const r = await pool.query(
+      `
+      SELECT
+        m.cabinet_id,
+        COALESCE(c.nom, 'Cabinet') AS cabinet_nom,
+        MAX(m.created_at) AS last_message_at
+      FROM messages m
+      LEFT JOIN cabinets c ON c.id = m.cabinet_id
+      WHERE m.patient_id = $1
+      GROUP BY m.cabinet_id, c.nom
+      ORDER BY MAX(m.created_at) DESC
+      `,
+      [patient_id]
+    );
+
+    res.json({
+      success: true,
+      conversations: r.rows
+    });
+  } catch (err) {
+    console.log("GET CONVERSATIONS ERROR:", err.message);
+    res.status(500).json({ error: "erreur serveur" });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
