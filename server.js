@@ -1468,7 +1468,8 @@ app.post("/ordonnances", authRequired, medecinOrAdmin, upload.single("file"), as
 
     push("patient_id", patient_id);
     push("titre", titre);
-    push("contenu", contenu);
+    push("contenu", fichierPath || contenu);
+
 
     if (fichierPath) {
       const fileCol = firstExisting(cols, ["fichier", "chemin_fichier", "file", "url", "path"]);
