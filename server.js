@@ -881,17 +881,44 @@ app.delete("/allergies/:id", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.delete("/documents/:id", async (req, res) => {
-  const { id } = req.params;
-
+app.delete("/documents/:id", authRequired, staff, async (req, res) => {
   try {
-    await pool.query("DELETE FROM documents WHERE id=$1", [id]);
-    res.json({ message: "Document supprimé ✅" });
+    const { id } = req.params;
+
+    const check = await pool.query(
+      `
+      SELECT d.*
+      FROM documents d
+      JOIN patients p ON p.id = d.patient_id
+      WHERE d.id = $1
+        AND p.cabinet_id = $2
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: "Document introuvable" });
+    }
+
+    const doc = check.rows[0];
+
+    if ((doc.source_document || "patient") !== "patient") {
+      return res.status(403).json({ error: "Suppression refusée pour ce document" });
+    }
+
+    const r = await pool.query(
+      "DELETE FROM documents WHERE id = $1 RETURNING *",
+      [id]
+    );
+
+    res.json({ success: true, deleted: r.rows[0] });
   } catch (err) {
     console.log("DELETE DOCUMENT ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
 /* =========================================================
    ==================== ANTECEDENTS =========================
 ========================================================= */
@@ -1581,22 +1608,24 @@ app.delete("/ordonnances/:id", authRequired, staff, async (req, res) => {
 
 app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
   const { id } = req.params;
-
   try {
     const patient = await pool.query(
       "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
       [id, req.user.cabinet_id]
     );
-
     if (patient.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
     }
-
     const result = await pool.query(
-      "SELECT * FROM documents WHERE patient_id=$1 ORDER BY id DESC",
+      `
+      SELECT *
+      FROM documents
+      WHERE patient_id = $1
+        AND COALESCE(source_document, 'patient') = 'patient'
+      ORDER BY id DESC
+      `,
       [id]
     );
-
     res.json(result.rows);
   } catch (err) {
     console.log("GET DOCUMENTS ERROR:", err.message);
