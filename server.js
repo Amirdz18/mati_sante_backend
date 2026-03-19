@@ -1533,21 +1533,28 @@ app.post("/patients/:id/documents", authRequired, medecinOrAdmin, async (req, re
 });
 app.post("/patient/message", async (req, res) => {
   try {
-    const {
-      patient_id,
-      cabinet_id,
-      expediteur_type,
-      expediteur_id,
-      message,
-      document_id
-    } = req.body;
+    const { patient_id, cabinet_id, contenu } = req.body || {};
+
+    if (!patient_id || !cabinet_id || !contenu || !String(contenu).trim()) {
+      return res.status(400).json({ error: "patient_id, cabinet_id et contenu requis" });
+    }
+
+    const p = await pool.query(
+      "SELECT id FROM patients WHERE id = $1 LIMIT 1",
+      [patient_id]
+    );
+
+    if (p.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
 
     const r = await pool.query(
-      `INSERT INTO messages_patient
-       (patient_id, cabinet_id, expediteur_type, expediteur_id, message, document_id)
-       VALUES ($1,$2,$3,$4,$5,$6)
-       RETURNING *`,
-      [patient_id, cabinet_id, expediteur_type, expediteur_id, message, document_id || null]
+      `
+      INSERT INTO messages (patient_id, cabinet_id, contenu, sender)
+      VALUES ($1, $2, $3, 'patient')
+      RETURNING id, contenu AS message, sender AS expediteur_type, created_at
+      `,
+      [patient_id, cabinet_id, String(contenu).trim()]
     );
 
     res.json({
@@ -1555,20 +1562,40 @@ app.post("/patient/message", async (req, res) => {
       message: r.rows[0]
     });
   } catch (e) {
-    console.error(e);
+    console.error("POST /patient/message ERROR:", e);
     res.status(500).json({ error: "erreur serveur" });
   }
 });
 app.get("/patient/:id/messages", async (req, res) => {
   try {
-    const patient_id = req.params.id;
+    const patient_id = Number(req.params.id);
+    const cabinet_id = Number(req.query.cabinet_id);
+
+    if (!patient_id || !cabinet_id) {
+      return res.status(400).json({ error: "patient_id et cabinet_id requis" });
+    }
+
+    const p = await pool.query(
+      "SELECT id FROM patients WHERE id = $1 LIMIT 1",
+      [patient_id]
+    );
+
+    if (p.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
 
     const r = await pool.query(
-      `SELECT *
-       FROM messages_patient
-       WHERE patient_id = $1
-       ORDER BY created_at DESC`,
-      [patient_id]
+      `
+      SELECT
+        id,
+        contenu AS message,
+        sender AS expediteur_type,
+        created_at
+      FROM messages
+      WHERE patient_id = $1 AND cabinet_id = $2
+      ORDER BY created_at ASC
+      `,
+      [patient_id, cabinet_id]
     );
 
     res.json({
@@ -1576,7 +1603,7 @@ app.get("/patient/:id/messages", async (req, res) => {
       messages: r.rows
     });
   } catch (e) {
-    console.error(e);
+    console.error("GET /patient/:id/messages ERROR:", e);
     res.status(500).json({ error: "erreur serveur" });
   }
 });
