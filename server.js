@@ -3037,17 +3037,16 @@ app.get("/dashboard/document-recu-notification", async (req, res) => {
       FROM documents d
       LEFT JOIN patients p ON p.id = d.patient_id
       WHERE COALESCE(d.lu_dashboard, false) = false
+        AND COALESCE(d.source_document, 'patient') = 'patient'
       ORDER BY d.created_at DESC, d.id DESC
       LIMIT 1
     `);
-
     res.json(r.rows[0] || null);
   } catch (err) {
     console.log("DASHBOARD DOCUMENT NOTIF ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
-
 app.post("/dashboard/document-recu-notification/:id/read", async (req, res) => {
   try {
     const { id } = req.params;
@@ -3073,8 +3072,8 @@ app.get("/dashboard/documents-count", async (req, res) => {
       SELECT COUNT(*)
       FROM documents
       WHERE COALESCE(lu_dashboard,false) = false
+        AND COALESCE(source_document, 'patient') = 'patient'
     `);
-
     res.json({ count: Number(r.rows[0].count || 0) });
   } catch (err) {
     console.log("DOC COUNT ERROR:", err.message);
