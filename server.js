@@ -3309,6 +3309,33 @@ app.post("/messages", authRequired, staff, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.delete("/patient/documents/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const r = await pool.query(
+      `
+      DELETE FROM documents
+      WHERE id = $1
+        AND COALESCE(source_document, 'patient') = 'medecin'
+      RETURNING *
+      `,
+      [id]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: "Document introuvable" });
+    }
+
+    res.json({
+      success: true,
+      deleted: r.rows[0]
+    });
+  } catch (err) {
+    console.log("DELETE PATIENT DOCUMENT ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
