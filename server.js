@@ -791,7 +791,8 @@ app.post("/patients/:id/link-app", async (req, res) => {
   const { id } = req.params;
 
   try {
-    const p = await pool.query("SELECT * FROM patients WHERE id=$1", [id]);
+    const p = await pool.query("SELECT * FROM patients WHERE id = $1", [id]);
+
     if (p.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
     }
@@ -805,8 +806,25 @@ app.post("/patients/:id/link-app", async (req, res) => {
       });
     }
 
-    // Comme ta table patients_app ne contient que:
-    // id, patient_id, created_at
+    const existing = await pool.query(
+      "SELECT id FROM patients_app WHERE patient_id = $1 LIMIT 1",
+      [patient.id]
+    );
+
+    if (existing.rows.length > 0) {
+      const existingId = existing.rows[0].id;
+
+      await pool.query(
+        "UPDATE patients SET patient_app_id = $1 WHERE id = $2",
+        [existingId, patient.id]
+      );
+
+      return res.json({
+        message: "Lien resynchronisé ✅",
+        patient_app_id: existingId,
+      });
+    }
+
     const r = await pool.query(
       `INSERT INTO patients_app (patient_id)
        VALUES ($1)
@@ -817,14 +835,17 @@ app.post("/patients/:id/link-app", async (req, res) => {
     const patient_app_id = r.rows[0].id;
 
     await pool.query(
-      "UPDATE patients SET patient_app_id=$1 WHERE id=$2",
-      [patient_app_id, id]
+      "UPDATE patients SET patient_app_id = $1 WHERE id = $2",
+      [patient_app_id, patient.id]
     );
 
-    res.json({ message: "Lien créé ✅", patient_app_id });
+    return res.json({
+      message: "Lien créé ✅",
+      patient_app_id,
+    });
   } catch (err) {
     console.log("LINK-APP ERROR:", err.message);
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 /* =========================================================
