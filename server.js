@@ -1465,7 +1465,7 @@ app.post("/ordonnances", authRequired,medecinOrAdmin, upload.single("file"), asy
 });
 app.post("/documents/send-existing-file", authRequired, medecinOrAdmin, async (req, res) => {
   try {
-    const { patient_id, titre, fichier, categorie } = req.body || {};
+    const { patient_id, titre, fichier } = req.body || {};
 
     if (!patient_id || !fichier) {
       return res.status(400).json({ error: "patient_id et fichier requis" });
@@ -1485,7 +1485,7 @@ app.post("/documents/send-existing-file", authRequired, medecinOrAdmin, async (r
     }
 
     const p = await pool.query(
-      "SELECT id FROM patients WHERE id = $1 LIMIT 1",
+      "SELECT id, cabinet_id FROM patients WHERE id = $1 LIMIT 1",
       [patient_id]
     );
 
@@ -1495,15 +1495,14 @@ app.post("/documents/send-existing-file", authRequired, medecinOrAdmin, async (r
 
     const r = await pool.query(
       `
-      INSERT INTO documents (patient_id, titre, contenu, categorie, nom)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO documents (patient_id, titre, contenu, nom)
+      VALUES ($1, $2, $3, $4)
       RETURNING *
       `,
       [
         patient_id,
         titre || "Document médical",
         savedPath,
-        categorie || "Document reçu",
         titre || "Document médical",
       ]
     );
@@ -1517,6 +1516,7 @@ app.post("/documents/send-existing-file", authRequired, medecinOrAdmin, async (r
     return res.status(500).json({ error: err.message });
   }
 });
+
 app.delete("/ordonnances/:id", authRequired, staff, async (req, res) => {
   const { id } = req.params;
 
