@@ -1463,7 +1463,60 @@ app.post("/ordonnances", authRequired,medecinOrAdmin, upload.single("file"), asy
     res.status(500).json({ error: err.message });
   }
 });
+app.post("/documents/send-existing-file", authRequired, medecinOrAdmin, async (req, res) => {
+  try {
+    const { patient_id, titre, fichier, categorie } = req.body || {};
 
+    if (!patient_id || !fichier) {
+      return res.status(400).json({ error: "patient_id et fichier requis" });
+    }
+
+    let savedPath = String(fichier).trim();
+
+    if (savedPath.startsWith("http://") || savedPath.startsWith("https://")) {
+      try {
+        const u = new URL(savedPath);
+        savedPath = u.pathname;
+      } catch (_) {}
+    }
+
+    if (!savedPath.startsWith("/uploads/")) {
+      return res.status(400).json({ error: "Fichier invalide" });
+    }
+
+    const p = await pool.query(
+      "SELECT id FROM patients WHERE id = $1 LIMIT 1",
+      [patient_id]
+    );
+
+    if (p.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
+    const r = await pool.query(
+      `
+      INSERT INTO documents (patient_id, titre, contenu, categorie, nom)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+      `,
+      [
+        patient_id,
+        titre || "Document médical",
+        savedPath,
+        categorie || "Document reçu",
+        titre || "Document médical",
+      ]
+    );
+
+    return res.json({
+      success: true,
+      document: r.rows[0],
+    });
+  } catch (err) {
+    console.log("SEND EXISTING FILE ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
 app.delete("/ordonnances/:id", authRequired, staff, async (req, res) => {
   const { id } = req.params;
 
