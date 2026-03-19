@@ -1527,18 +1527,20 @@ app.post("/documents/send-existing-file", authRequired, medecinOrAdmin, async (r
     }
 
     const r = await pool.query(
-      `
-      INSERT INTO documents (patient_id, titre, contenu, nom)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *
-      `,
-      [
-        patient_id,
-        titre || "Document médical",
-        savedPath,
-        titre || "Document médical",
-      ]
-    );
+  `
+  INSERT INTO documents (patient_id, titre, contenu, nom, source_document)
+  VALUES ($1, $2, $3, $4, 'medecin')
+  RETURNING *
+  `,
+  [
+    patient_id,
+    titre || "Document médical",
+    savedPath,
+    titre || "Document médical",
+  ]
+);
+
+
 
     return res.json({
       success: true,
