@@ -1707,10 +1707,10 @@ app.post("/patient/message", async (req, res) => {
 app.get("/patient/:id/messages", async (req, res) => {
   try {
     const patient_id = Number(req.params.id);
-    const cabinet_id = Number(req.query.cabinet_id);
+    const cabinet_id = req.query.cabinet_id ? Number(req.query.cabinet_id) : null;
 
-    if (!patient_id || !cabinet_id) {
-      return res.status(400).json({ error: "patient_id et cabinet_id requis" });
+    if (!patient_id) {
+      return res.status(400).json({ error: "patient_id requis" });
     }
 
     const p = await pool.query(
@@ -1722,19 +1722,39 @@ app.get("/patient/:id/messages", async (req, res) => {
       return res.status(404).json({ error: "Patient introuvable" });
     }
 
-    const r = await pool.query(
-      `
-      SELECT
-        id,
-        contenu AS message,
-        sender AS expediteur_type,
-        created_at
-      FROM messages
-      WHERE patient_id = $1 AND cabinet_id = $2
-      ORDER BY created_at ASC
-      `,
-      [patient_id, cabinet_id]
-    );
+    let r;
+
+    if (cabinet_id) {
+      r = await pool.query(
+        `
+        SELECT
+          id,
+          contenu AS message,
+          sender AS expediteur_type,
+          created_at,
+          cabinet_id
+        FROM messages
+        WHERE patient_id = $1 AND cabinet_id = $2
+        ORDER BY created_at ASC
+        `,
+        [patient_id, cabinet_id]
+      );
+    } else {
+      r = await pool.query(
+        `
+        SELECT
+          id,
+          contenu AS message,
+          sender AS expediteur_type,
+          created_at,
+          cabinet_id
+        FROM messages
+        WHERE patient_id = $1
+        ORDER BY created_at ASC
+        `,
+        [patient_id]
+      );
+    }
 
     res.json({
       success: true,
@@ -1745,6 +1765,8 @@ app.get("/patient/:id/messages", async (req, res) => {
     res.status(500).json({ error: "erreur serveur" });
   }
 });
+
+
 
 
 app.post("/documents", upload.single("file"), async (req, res) => {
