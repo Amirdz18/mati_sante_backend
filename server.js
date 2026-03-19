@@ -3336,6 +3336,55 @@ app.delete("/patient/documents/:id", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.get("/patient/:id/home-stats", async (req, res) => {
+  try {
+    const patient_id = Number(req.params.id);
+
+    if (!patient_id) {
+      return res.status(400).json({ error: "patient_id invalide" });
+    }
+
+    const patient = await pool.query(
+      "SELECT id FROM patients WHERE id = $1 LIMIT 1",
+      [patient_id]
+    );
+
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
+    const messagesResult = await pool.query(
+      `
+      SELECT COUNT(*)::int AS count
+      FROM messages
+      WHERE patient_id = $1
+        AND sender = 'medecin'
+      `,
+      [patient_id]
+    );
+
+    const documentsResult = await pool.query(
+      `
+      SELECT COUNT(*)::int AS count
+      FROM documents
+      WHERE patient_id = $1
+        AND COALESCE(source_document, 'patient') = 'medecin'
+      `,
+      [patient_id]
+    );
+
+    return res.json({
+      success: true,
+      stats: {
+        messages: Number(messagesResult.rows[0]?.count || 0),
+        documents: Number(documentsResult.rows[0]?.count || 0),
+      },
+    });
+  } catch (err) {
+    console.log("HOME STATS ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
