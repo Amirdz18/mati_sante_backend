@@ -1427,6 +1427,7 @@ app.get("/patients/:id/ordonnances", authRequired, staff, async (req, res) => {
 app.post("/ordonnances", authRequired, medecinOrAdmin, upload.single("file"), async (req, res) => {
   try {
     const cols = await getTableColumns("ordonnances");
+    console.log("ORDONNANCES COLS =", Array.from(cols));
 
     const patient_id = req.body?.patient_id ? Number(req.body.patient_id) : null;
     const titre = req.body?.titre || "Ordonnance";
@@ -1485,7 +1486,7 @@ app.post("/ordonnances", authRequired, medecinOrAdmin, upload.single("file"), as
       ,
       params
     );
-
+    console.log("ORDONNANCE SAVED =", result.rows[0]); 
     res.json(result.rows[0]);
   } catch (err) {
     console.log("ORDONNANCE ERROR:", err.message);
