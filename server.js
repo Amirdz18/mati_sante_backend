@@ -1404,132 +1404,55 @@ app.get("/patients/:id/analyses", authRequired, staff, async (req, res) => {
   const { id } = req.params;
 
   try {
-
     const patient = await pool.query(
-  `
-  SELECT p.id
-  FROM patients p
-  JOIN cabinet_patients cp ON cp.patient_id = p.id
-  WHERE p.id = $1 AND cp.cabinet_id = $2
-  LIMIT 1
-  `,
-  [patient_id, req.user.cabinet_id]
-);
-
-    if (p.rows.length === 0) {
-      return res.status(404).json({ error: "Patient introuvable" });
-    }
-
-    const patient_app_id = p.rows[0]?.patient_app_id;
-
-    const result = await pool.query(
-      "SELECT * FROM analyses WHERE patient_app_id=$1 OR patient_id=$2 ORDER BY id DESC",
-      [patient_app_id, id]
+      `
+      SELECT p.id, p.patient_app_id
+      FROM patients p
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE p.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id]
     );
 
-    res.json(result.rows);
-
-  } catch (err) {
-    console.log("GET ANALYSES ERROR:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post("/analyses", authRequired, medecinOrAdmin, upload.single("file"), async (req, res) => {
-  try {
-    console.log("BODY ANALYSE =", req.body);
-
-    const cols = await getTableColumns("analyses");
-
-    const patient_id = req.body.patient_id ? Number(req.body.patient_id) : null;
-    const consultation_id = req.body.consultation_id ? Number(req.body.consultation_id) : null;
-    const medecin_id = req.body.medecin_id ? Number(req.body.medecin_id) : req.user.id;
-
-    const type_analyse = req.body.type_analyse || req.body.nom || "Analyse";
-
-    const remarque =
-      req.body?.remarque ||
-      req.body?.nom ||
-      "Analyse";
-
-    const date_analyse = req.body.date_analyse || null;
-
-    const laboratoire = req.body.laboratoire || null;
-    const date_resultat = req.body.date_resultat || null;
-    const conclusion = req.body.conclusion || null;
-
-    if (!patient_id) {
-      return res.status(400).json({ error: "patient_id obligatoire" });
-    }
-
-    const p = await pool.query(
-  `
-  SELECT p.patient_app_id
-  FROM patients p
-  JOIN cabinet_patients cp ON cp.patient_id = p.id
-  WHERE p.id = $1 AND cp.cabinet_id = $2
-  LIMIT 1
-  `,
-  [patient_id, req.user.cabinet_id]
-);
-
-    if (p.rows.length === 0) {
+    if (patient.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
     }
 
-    const patient_app_id = p.rows[0]?.patient_app_id;
+    const patient_app_id = patient.rows[0]?.patient_app_id || null;
+    const cols = await getTableColumns("analyses");
 
-    const insertCols = [];
-    const insertVals = [];
+    const hasPatientId = cols.has("patient_id");
+    const hasPatientAppId = cols.has("patient_app_id");
+
+    let query = "SELECT * FROM analyses";
+    const where = [];
     const params = [];
 
-    const push = (col, val) => {
-      if (!cols.has(col)) return;
-      insertCols.push(col);
-      params.push(val);
-      insertVals.push("$" + params.length);
-    };
-
-    push("patient_id", patient_id);
-    push("patient_app_id", patient_app_id);
-    push("medecin_id", medecin_id);
-
-    if (consultation_id) push("consultation_id", consultation_id);
-
-    push("nom", type_analyse);
-    push("type_analyse", type_analyse);
-    if (date_analyse) push("date_analyse", date_analyse);
-
-    push("contenu", remarque);
-    push("remarque", remarque);
-
-    if (laboratoire) push("laboratoire", laboratoire);
-    if (date_resultat) push("date_resultat", date_resultat);
-    if (conclusion) push("conclusion", conclusion);
-
-    if (req.file) {
-      const savedPath = `/uploads/${req.file.filename}`;
-      const fileCol = firstExisting(cols, ["chemin_fichier", "fichier", "file", "path", "url", "contenu"]);
-      if (fileCol) push(fileCol, savedPath);
+    if (hasPatientAppId && patient_app_id) {
+      params.push(patient_app_id);
+      where.push(`patient_app_id = $${params.length}`);
     }
 
-    if (insertCols.length === 0) {
+    if (hasPatientId) {
+      params.push(Number(id));
+      where.push(`patient_id = $${params.length}`);
+    }
+
+    if (where.length === 0) {
       return res.status(400).json({ error: "Aucune colonne compatible trouvée dans analyses" });
     }
 
-    const q = `INSERT INTO analyses (${insertCols.join(",")})
-               VALUES (${insertVals.join(",")})
-               RETURNING *`;
+    query += ` WHERE ${where.join(" OR ")} ORDER BY id DESC`;
 
-    const result = await pool.query(q, params);
-
-    res.json(result.rows[0]);
-
+    const result = await pool.query(query, params);
+    return res.json(result.rows);
   } catch (err) {
-    console.log("CREATE ANALYSE ERROR:", err.message);
-    res.status(500).json({ error: err.message });
+    console.log("GET ANALYSES ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
+
 app.delete("/analyses/:id", authRequired, staff, async (req, res) => {
   try {
     const id = Number(req.params.id);
