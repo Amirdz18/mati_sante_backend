@@ -340,7 +340,14 @@ app.post("/patient/register", async (req, res) => {
        RETURNING id, patient_app_id`,
       [nom, prenom, telephone, email, hash, cabinet_id]
     );
-
+await pool.query(
+  `
+  INSERT INTO cabinet_patients (cabinet_id, patient_id)
+  VALUES ($1, $2)
+  ON CONFLICT (cabinet_id, patient_id) DO NOTHING
+  `,
+  [cabinet_id, r.rows[0].id]
+);
     res.json({ success: true, patient: r.rows[0] });
   } catch (err) {
     console.error(err);
@@ -437,36 +444,58 @@ app.post("/patient/login", async (req, res) => {
 });
 app.get("/patient/:id/rdv", async (req, res) => {
   try {
-
     const patient_id = req.params.id;
 
+    const p = await pool.query(
+      "SELECT id FROM patients WHERE id = $1 LIMIT 1",
+      [patient_id]
+    );
+
+    if (p.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
     const r = await pool.query(
-    `SELECT *
-     FROM rendez_vous
-     WHERE patient_id = $1
-     ORDER BY date_rdv DESC`,
-    [patient_id]
+      `
+      SELECT *
+      FROM rendez_vous
+      WHERE patient_id = $1
+      ORDER BY date_rdv DESC, heure_debut DESC NULLS LAST, id DESC
+      `,
+      [patient_id]
     );
 
     res.json({
       success: true,
       rdv: r.rows
     });
-
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "erreur serveur" });
   }
 });
+
 app.get("/patient/:id/documents", async (req, res) => {
   try {
     const patient_id = req.params.id;
 
+    const p = await pool.query(
+      "SELECT id FROM patients WHERE id = $1 LIMIT 1",
+      [patient_id]
+    );
+
+    if (p.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
     const r = await pool.query(
-      `SELECT *
-       FROM documents
-       WHERE patient_id = $1
-       ORDER BY created_at DESC`,
+      `
+      SELECT *
+      FROM documents
+      WHERE patient_id = $1
+        AND COALESCE(source_document, 'patient') = 'medecin'
+      ORDER BY created_at DESC, id DESC
+      `,
       [patient_id]
     );
 
@@ -474,12 +503,12 @@ app.get("/patient/:id/documents", async (req, res) => {
       success: true,
       documents: r.rows
     });
-
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "erreur serveur" });
   }
 });
+
 // /auth/me => retourne le user du token
 app.get("/auth/me", authRequired, (req, res) => {
   return res.json({ ok: true, user: req.user });
@@ -728,9 +757,9 @@ app.put("/patients/:id", authRequired, medecinOrAdmin, async (req, res) => {
     if (req.body.telephone && String(req.body.telephone).trim() !== "") {
    
       const existingPhone = await pool.query(
-    "SELECT id FROM patients WHERE telephone=$1 AND cabinet_id=$2 AND id<>$3 LIMIT 1",
-    [req.body.telephone, req.user.cabinet_id, id]
-  );
+  "SELECT id FROM patients WHERE telephone=$1 AND id<>$2 LIMIT 1",
+  [req.body.telephone, id]
+);
 
   if (existingPhone.rows.length > 0) {
     return res.status(409).json({ error: "Un autre patient avec ce téléphone existe déjà" });
@@ -738,9 +767,9 @@ app.put("/patients/:id", authRequired, medecinOrAdmin, async (req, res) => {
 }
 if (req.body.email && String(req.body.email).trim() !== "") {
   const existingEmail = await pool.query(
-    "SELECT id FROM patients WHERE email=$1 AND cabinet_id=$2 AND id<>$3 LIMIT 1",
-    [req.body.email, req.user.cabinet_id, id]
-  );
+  "SELECT id FROM patients WHERE email=$1 AND id<>$2 LIMIT 1",
+  [req.body.email, id]
+);
 
   if (existingEmail.rows.length > 0) {
     return res.status(409).json({ error: "Un autre patient avec cet email existe déjà" });
@@ -782,19 +811,37 @@ if (req.body.email && String(req.body.email).trim() !== "") {
 app.delete("/patients/:id", authRequired, medecinOrAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const r = await pool.query(
-  "UPDATE patients SET actif = false WHERE id=$1 RETURNING id",
-  [id]
-);
 
-    if (r.rows.length === 0) return res.status(404).json({ error: "Patient introuvable" });
+    const check = await pool.query(
+      `
+      SELECT p.id
+      FROM patients p
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE p.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
+    const r = await pool.query(
+      "UPDATE patients SET actif = false WHERE id=$1 RETURNING id",
+      [id]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
     res.json({ ok: true, message: "Patient supprimé ✅" });
   } catch (err) {
     if (err.code === "23505") {
-  return res.status(409).json({ error: "Téléphone ou email déjà utilisé pour ce cabinet" });
-}
-res.status(500).json({ error: err.message });
-
+      return res.status(409).json({ error: "Téléphone ou email déjà utilisé pour ce cabinet" });
+    }
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -802,11 +849,20 @@ res.status(500).json({ error: err.message });
 /* =========================================================
    ======= LINK patient -> patients_app (AUTO) ==============
 ========================================================= */
-app.post("/patients/:id/link-app", async (req, res) => {
+app.post("/patients/:id/link-app", authRequired, staff, async (req, res) => {
   const { id } = req.params;
 
   try {
-    const p = await pool.query("SELECT * FROM patients WHERE id = $1", [id]);
+    const p = await pool.query(
+      `
+      SELECT p.*
+      FROM patients p
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE p.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id]
+    );
 
     if (p.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
@@ -866,51 +922,109 @@ app.post("/patients/:id/link-app", async (req, res) => {
 /* =========================================================
    ==================== ALLERGIES ===========================
 ========================================================= */
-app.get("/patients/:id/allergies", async (req, res) => {
+app.get("/patients/:id/allergies", authRequired, staff, async (req, res) => {
   const { id } = req.params;
   try {
-    const result = await pool.query("SELECT * FROM allergies WHERE patient_id=$1 ORDER BY id DESC", [id]);
+    const patient = await pool.query(
+      `
+      SELECT p.id
+      FROM patients p
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE p.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id]
+    );
+
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
+    const result = await pool.query(
+      "SELECT * FROM allergies WHERE patient_id=$1 ORDER BY id DESC",
+      [id]
+    );
+
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post("/patients/:id/allergies", async (req, res) => {
+app.post("/patients/:id/allergies", authRequired, staff, async (req, res) => {
   const { id } = req.params;
   const { nom } = req.body;
+
   try {
-    const result = await pool.query("INSERT INTO allergies (patient_id, nom) VALUES ($1,$2) RETURNING *", [id, nom]);
+    const patient = await pool.query(
+      `
+      SELECT p.id
+      FROM patients p
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE p.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id]
+    );
+
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
+    const result = await pool.query(
+      "INSERT INTO allergies (patient_id, nom) VALUES ($1,$2) RETURNING *",
+      [id, nom]
+    );
+
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
-app.delete("/allergies/:id", async (req, res) => {
+app.delete("/allergies/:id", authRequired, staff, async (req, res) => {
   const { id } = req.params;
+
   try {
+    const check = await pool.query(
+      `
+      SELECT a.id
+      FROM allergies a
+      JOIN patients p ON p.id = a.patient_id
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE a.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: "Allergie introuvable" });
+    }
+
     await pool.query("DELETE FROM allergies WHERE id=$1", [id]);
+
     res.json({ message: "Allergie supprimée ✅" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 app.delete("/documents/:id", authRequired, staff, async (req, res) => {
   try {
     const { id } = req.params;
 
     const check = await pool.query(
-      `
-      SELECT d.*
-      FROM documents d
-      JOIN patients p ON p.id = d.patient_id
-      WHERE d.id = $1
-        AND p.cabinet_id = $2
-      LIMIT 1
-      `,
-      [id, req.user.cabinet_id]
-    );
+  `
+  SELECT d.*
+  FROM documents d
+  JOIN patients p ON p.id = d.patient_id
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE d.id = $1
+    AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [id, req.user.cabinet_id]
+);
 
     if (check.rows.length === 0) {
       return res.status(404).json({ error: "Document introuvable" });
@@ -937,36 +1051,93 @@ app.delete("/documents/:id", authRequired, staff, async (req, res) => {
 /* =========================================================
    ==================== ANTECEDENTS =========================
 ========================================================= */
-app.get("/patients/:id/antecedents", async (req, res) => {
+app.get("/patients/:id/antecedents", authRequired, staff, async (req, res) => {
   const { id } = req.params;
   try {
-    const result = await pool.query("SELECT * FROM antecedents WHERE patient_id=$1 ORDER BY id DESC", [id]);
+    const patient = await pool.query(
+      `
+      SELECT p.id
+      FROM patients p
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE p.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id]
+    );
+
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
+    const result = await pool.query(
+      "SELECT * FROM antecedents WHERE patient_id=$1 ORDER BY id DESC",
+      [id]
+    );
+
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post("/patients/:id/antecedents", async (req, res) => {
+app.post("/patients/:id/antecedents", authRequired, staff, async (req, res) => {
   const { id } = req.params;
   const { nom } = req.body;
+
   try {
-    const result = await pool.query("INSERT INTO antecedents (patient_id, nom) VALUES ($1,$2) RETURNING *", [id, nom]);
+    const patient = await pool.query(
+      `
+      SELECT p.id
+      FROM patients p
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE p.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id]
+    );
+
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
+    const result = await pool.query(
+      "INSERT INTO antecedents (patient_id, nom) VALUES ($1,$2) RETURNING *",
+      [id, nom]
+    );
+
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
-app.delete("/antecedents/:id", async (req, res) => {
+app.delete("/antecedents/:id", authRequired, staff, async (req, res) => {
   const { id } = req.params;
+
   try {
+    const check = await pool.query(
+      `
+      SELECT a.id
+      FROM antecedents a
+      JOIN patients p ON p.id = a.patient_id
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE a.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: "Antécédent introuvable" });
+    }
+
     await pool.query("DELETE FROM antecedents WHERE id=$1", [id]);
+
     res.json({ message: "Antécédent supprimé ✅" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 app.delete("/messages/:id", authRequired, staff, async (req, res) => {
   const id = Number(req.params.id);
 
@@ -1000,10 +1171,15 @@ app.get("/patients/:id/consultations", authRequired, staff, async (req, res) => 
 
   try {
     const patient = await pool.query(
-      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
-      [id, req.user.cabinet_id]
-    );
-
+  `
+  SELECT p.id
+  FROM patients p
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE p.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [id, req.user.cabinet_id]
+);
     if (patient.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
     }
@@ -1040,9 +1216,15 @@ app.post("/consultations", authRequired, medecinOrAdmin, async (req, res) => {
     } = req.body;
 
     const patient = await pool.query(
-      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
-      [patient_id, req.user.cabinet_id]
-    );
+  `
+  SELECT p.id
+  FROM patients p
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE p.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [patient_id, req.user.cabinet_id]
+);
 
     if (patient.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
@@ -1080,10 +1262,14 @@ app.put("/consultations/:id", authRequired, medecinOrAdmin, async (req, res) => 
     const { id } = req.params;
 
     const current = await pool.query(
-      `SELECT c.id
-       FROM consultations c
-       JOIN patients p ON p.id = c.patient_id
-       WHERE c.id = $1 AND p.cabinet_id = $2`,
+      `
+      SELECT c.id
+      FROM consultations c
+      JOIN patients p ON p.id = c.patient_id
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE c.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
       [id, req.user.cabinet_id]
     );
 
@@ -1109,44 +1295,51 @@ app.put("/consultations/:id", authRequired, medecinOrAdmin, async (req, res) => 
     for (const [k, v] of Object.entries(payload)) {
       if (!cols.has(k)) continue;
       params.push(v);
-      sets.push(`${k}=$${params.length}`);
+      sets.push(`${k} = $${params.length}`);
     }
 
     if (sets.length === 0) {
-      return res.status(400).json({ error: "Aucune colonne à mettre à jour (schema incompatible)" });
-    }
-
-    if (req.body.date_rdv !== undefined || req.body.heure_debut !== undefined || req.body.heure_fin !== undefined) {
-      sets.push(`sms_rappel_envoye=FALSE`);
+      return res.status(400).json({ error: "Aucun champ à modifier" });
     }
 
     params.push(id);
 
-    const q = `UPDATE consultations SET ${sets.join(", ")} WHERE id=$${params.length} RETURNING *`;
+    const q = `
+      UPDATE consultations
+      SET ${sets.join(", ")}
+      WHERE id = $${params.length}
+      RETURNING *
+    `;
+
     const result = await pool.query(q, params);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Consultation introuvable" });
     }
 
-    res.json(result.rows[0]);
+    return res.json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.log("PUT /consultations/:id ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
+
 
 app.delete("/consultations/:id", authRequired, staff, async (req, res) => {
   const { id } = req.params;
 
   try {
-    const check = await pool.query(
-      `SELECT c.id
-       FROM consultations c
-       JOIN patients p ON p.id = c.patient_id
-       WHERE c.id=$1 AND p.cabinet_id=$2`,
-      [id, req.user.cabinet_id]
-    );
-
+   const check = await pool.query(
+  `
+  SELECT c.id
+  FROM consultations c
+  JOIN patients p ON p.id = c.patient_id
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE c.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [id, req.user.cabinet_id]
+);
     if (check.rows.length === 0) {
       return res.status(404).json({ error: "Consultation introuvable" });
     }
@@ -1164,9 +1357,15 @@ app.get("/patients/:id/timeline", authRequired, staff, async (req, res) => {
 
   try {
     const patient = await pool.query(
-      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
-      [id, req.user.cabinet_id]
-    );
+  `
+  SELECT p.id
+  FROM patients p
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE p.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [id, req.user.cabinet_id]
+);
 
     if (patient.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
@@ -1219,10 +1418,16 @@ app.get("/patients/:id/analyses", authRequired, staff, async (req, res) => {
 
   try {
 
-    const p = await pool.query(
-      "SELECT patient_app_id FROM patients WHERE id=$1 AND cabinet_id=$2",
-      [id, req.user.cabinet_id]
-    );
+    const patient = await pool.query(
+  `
+  SELECT p.id
+  FROM patients p
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE p.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [patient_id, req.user.cabinet_id]
+);
 
     if (p.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
@@ -1271,9 +1476,15 @@ app.post("/analyses", authRequired, medecinOrAdmin, upload.single("file"), async
     }
 
     const p = await pool.query(
-      "SELECT patient_app_id FROM patients WHERE id=$1 AND cabinet_id=$2",
-      [patient_id, req.user.cabinet_id]
-    );
+  `
+  SELECT p.patient_app_id
+  FROM patients p
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE p.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [patient_id, req.user.cabinet_id]
+);
 
     if (p.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
@@ -1332,18 +1543,30 @@ app.post("/analyses", authRequired, medecinOrAdmin, upload.single("file"), async
     res.status(500).json({ error: err.message });
   }
 });
-app.delete("/analyses/:id", authRequired, async (req, res) => {
+app.delete("/analyses/:id", authRequired, staff, async (req, res) => {
   try {
     const id = Number(req.params.id);
+
+    const check = await pool.query(
+      `
+      SELECT a.id
+      FROM analyses a
+      JOIN patients p ON p.id = a.patient_id
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE a.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: "Analyse introuvable" });
+    }
 
     const r = await pool.query(
       "DELETE FROM analyses WHERE id = $1 RETURNING *",
       [id]
     );
-
-    if (r.rows.length === 0) {
-      return res.status(404).json({ error: "Analyse introuvable" });
-    }
 
     res.json({ message: "Analyse supprimée ✅", deleted: r.rows[0] });
   } catch (err) {
@@ -1361,9 +1584,15 @@ app.get("/patients/:id/imagerie", authRequired, staff, async (req, res) => {
 
   try {
     const patient = await pool.query(
-      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
-      [id, req.user.cabinet_id]
-    );
+  `
+  SELECT p.id
+  FROM patients p
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE p.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [id, req.user.cabinet_id]
+);
 
     if (patient.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
@@ -1392,10 +1621,15 @@ app.post("/imagerie", authRequired, medecinOrAdmin, upload.single("file"), async
     }
 
     const patient = await pool.query(
-      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
-      [patient_id, req.user.cabinet_id]
-    );
-
+  `
+  SELECT p.id
+  FROM patients p
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE p.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [patient_id, req.user.cabinet_id]
+);
     if (patient.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
     }
@@ -1419,12 +1653,17 @@ app.delete("/imagerie/:id", authRequired, staff, async (req, res) => {
 
   try {
     const check = await pool.query(
-      `SELECT i.id
-       FROM imagerie i
-       JOIN patients p ON p.id = i.patient_id
-       WHERE i.id=$1 AND p.cabinet_id=$2`,
-      [id, req.user.cabinet_id]
-    );
+  `
+  SELECT i.id
+  FROM imagerie i
+  JOIN patients p ON p.id = i.patient_id
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE i.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [id, req.user.cabinet_id]
+);
+
 
     if (check.rows.length === 0) {
       return res.status(404).json({ error: "Imagerie introuvable" });
@@ -1446,9 +1685,15 @@ app.get("/patients/:id/ordonnances", authRequired, staff, async (req, res) => {
 
   try {
     const patient = await pool.query(
-      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
-      [id, req.user.cabinet_id]
-    );
+  `
+  SELECT p.id
+  FROM patients p
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE p.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [id, req.user.cabinet_id]
+);
 
     if (patient.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
@@ -1487,9 +1732,15 @@ app.post("/ordonnances", authRequired, medecinOrAdmin, upload.single("file"), as
     }
 
     const patient = await pool.query(
-      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
-      [patient_id, req.user.cabinet_id]
-    );
+  `
+  SELECT p.id
+  FROM patients p
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE p.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [patient_id, req.user.cabinet_id]
+);
 
     if (patient.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
@@ -1560,9 +1811,15 @@ app.post("/documents/send-existing-file", authRequired, medecinOrAdmin, async (r
     }
 
     const p = await pool.query(
-      "SELECT id, cabinet_id FROM patients WHERE id = $1 LIMIT 1",
-      [patient_id]
-    );
+  `
+  SELECT p.id
+  FROM patients p
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE p.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [patient_id, req.user.cabinet_id]
+);
 
     if (p.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
@@ -1599,12 +1856,16 @@ app.delete("/ordonnances/:id", authRequired, staff, async (req, res) => {
 
   try {
     const check = await pool.query(
-      `SELECT o.id
-       FROM ordonnances o
-       JOIN patients p ON p.id = o.patient_id
-       WHERE o.id=$1 AND p.cabinet_id=$2`,
-      [id, req.user.cabinet_id]
-    );
+  `
+  SELECT o.id
+  FROM ordonnances o
+  JOIN patients p ON p.id = o.patient_id
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE o.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [id, req.user.cabinet_id]
+);
 
     if (check.rows.length === 0) {
       return res.status(404).json({ error: "Ordonnance introuvable" });
@@ -1625,9 +1886,15 @@ app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
   const { id } = req.params;
   try {
     const patient = await pool.query(
-      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
-      [id, req.user.cabinet_id]
-    );
+  `
+  SELECT p.id
+  FROM patients p
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE p.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [id, req.user.cabinet_id]
+);
     if (patient.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
     }
@@ -1656,10 +1923,16 @@ app.post("/patients/:id/documents", authRequired, medecinOrAdmin, async (req, re
   const { titre, nom, contenu } = req.body;
 
   try {
-    const patient = await pool.query(
-      "SELECT id FROM patients WHERE id=$1 AND cabinet_id=$2",
-      [id, req.user.cabinet_id]
-    );
+   const patient = await pool.query(
+  `
+  SELECT p.id
+  FROM patients p
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE p.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [id, req.user.cabinet_id]
+);
 
     if (patient.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
@@ -1729,9 +2002,9 @@ app.get("/patient/:id/messages", async (req, res) => {
     }
 
     const p = await pool.query(
-      "SELECT id FROM patients WHERE id = $1 LIMIT 1",
-      [patient_id]
-    );
+  "SELECT id FROM patients WHERE id = $1 LIMIT 1",
+  [patient_id]
+);
 
     if (p.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
@@ -2938,25 +3211,7 @@ app.delete("/users/:id", authRequired, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.delete("/documents/:id", authRequired, staff, async (req, res) => {
-  try {
-    const { id } = req.params;
 
-    const r = await pool.query(
-      "DELETE FROM documents WHERE id = $1 RETURNING *",
-      [id]
-    );
-
-    if (r.rows.length === 0) {
-      return res.status(404).json({ error: "Document introuvable" });
-    }
-
-    res.json({ success: true, deleted: r.rows[0] });
-  } catch (err) {
-    console.log("DELETE DOCUMENT ERROR:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
 app.post("/documents/:id/classer-analyse", authRequired, medecinOrAdmin, async (req, res) => {
   try {
     const { id } = req.params;
