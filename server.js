@@ -541,18 +541,28 @@ const staff = requireRole("secretaire", "medecin", "admin");
 // LIST
 app.get("/patients", authRequired, staff, async (req, res) => {
   try {
-   const result = await pool.query(
-  "SELECT * FROM patients WHERE cabinet_id=$1 AND is_mobile_account = false AND actif = true ORDER BY id DESC",
-  [req.user.cabinet_id]
-);
-
-
+    const result = await pool.query(
+      `
+      SELECT p.*
+      FROM patients p
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE cp.cabinet_id = $1
+        AND p.is_mobile_account = false
+        AND p.actif = true
+      ORDER BY p.id DESC
+      `,
+      [req.user.cabinet_id]
+    );
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+
+// =============================
+// PATIENTS - CREATE (sans created_at/updated_at)
+// =============================
 app.post("/patients", authRequired, staff, async (req, res) => {
   try {
     const {
@@ -573,7 +583,7 @@ app.post("/patients", authRequired, staff, async (req, res) => {
       return res.status(400).json({ error: "nom obligatoire" });
     }
 
-    // Vérifier téléphone DANS CE CABINET
+    // Vérifier téléphone
     let existingPhone = null;
     if (telephone && String(telephone).trim() !== "") {
       const rPhone = await pool.query(
@@ -585,7 +595,7 @@ app.post("/patients", authRequired, staff, async (req, res) => {
       }
     }
 
-    // Vérifier email DANS CE CABINET
+    // Vérifier email
     let existingEmail = null;
     if (email && String(email).trim() !== "") {
       const rEmail = await pool.query(
@@ -597,69 +607,22 @@ app.post("/patients", authRequired, staff, async (req, res) => {
       }
     }
 
-    // ✅ CAS IMPORTANT :
-    // patient déjà existant dans ce cabinet mais créé depuis mobile
-    const existingMobile = existingPhone || existingEmail;
+    // Si téléphone ou email existe déjà ET actif=true => erreur
     if (
-      existingMobile &&
-      existingMobile.actif === true &&
-      existingMobile.is_mobile_account === true
-    ) {
-      const updatedMobile = await pool.query(
-        `
-        UPDATE patients
-        SET
-          nom = $1,
-          prenom = $2,
-          date_naissance = $3,
-          sexe = $4,
-          telephone = $5,
-          adresse = $6,
-          ville = $7,
-          cnas = $8,
-          email = $9,
-          groupe_sanguin = $10,
-          patient_app_id = COALESCE($11, patient_app_id),
-          is_mobile_account = false,
-          actif = true
-        WHERE id = $12
-        RETURNING *
-        `,
-        [
-          nom,
-          prenom || null,
-          date_naissance || null,
-          sexe || null,
-          telephone || null,
-          adresse || null,
-          ville || null,
-          cnas || null,
-          email || null,
-          groupe_sanguin || null,
-          patient_app_id || null,
-          existingMobile.id,
-        ]
-      );
+  existingPhone &&
+  existingPhone.actif === true &&
+  existingPhone.is_mobile_account === false
+) {
+  return res.status(409).json({ error: "Un patient avec ce téléphone existe déjà" });
+}
 
-      return res.json(updatedMobile.rows[0]);
-    }
-
-    // Si téléphone existe déjà dans ce cabinet comme vrai patient PC => erreur
-    if (
-      existingPhone &&
-      existingPhone.actif === true &&
-      existingPhone.is_mobile_account === false
-    ) {
-      return res.status(409).json({ error: "Un patient avec ce téléphone existe déjà" });
-    }
-
-    // Si email existe déjà dans ce cabinet => erreur
-    if (existingEmail && existingEmail.actif === true && existingEmail.is_mobile_account === false) {
+    if (existingEmail && existingEmail.actif === true) {
       return res.status(409).json({ error: "Un patient avec cet email existe déjà" });
     }
 
     // Si patient existe mais inactif => réactiver
     const existingInactive = existingPhone || existingEmail;
+
     if (existingInactive && existingInactive.actif === false) {
       const updateQuery = `
         UPDATE patients
@@ -681,6 +644,7 @@ app.post("/patients", authRequired, staff, async (req, res) => {
         WHERE id = $13
         RETURNING *
       `;
+
       const updated = await pool.query(updateQuery, [
         nom,
         prenom || null,
@@ -696,6 +660,7 @@ app.post("/patients", authRequired, staff, async (req, res) => {
         req.user.cabinet_id,
         existingInactive.id,
       ]);
+
       return res.json(updated.rows[0]);
     }
 
@@ -707,6 +672,7 @@ app.post("/patients", authRequired, staff, async (req, res) => {
       ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,true,false)
       RETURNING *
     `;
+
     const r = await pool.query(q, [
       nom,
       prenom || null,
@@ -737,11 +703,9 @@ app.post("/patients", authRequired, staff, async (req, res) => {
     return res.json(r2.rows[0]);
   } catch (err) {
     console.log("POST /patients ERROR:", err.message);
-
     if (err.code === "23505") {
       return res.status(409).json({ error: "Téléphone ou email déjà utilisé pour ce cabinet" });
     }
-
     return res.status(500).json({ error: err.message });
   }
 });
