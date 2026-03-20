@@ -3048,13 +3048,15 @@ res.status(500).json({ error: err.message });
 app.post("/create-cabinet", async (req, res) => {
   try {
     const {
-      nom_cabinet,
-      nom_medecin,
-      telephone,
-      adresse,
-      email,
-      password,
-    } = req.body || {};
+  nom_cabinet,
+  nom_medecin,
+  telephone,
+  adresse,
+  ville,
+  email,
+  password,
+} = req.body || {};
+
 
     if (!nom_cabinet || !nom_medecin || !email || !password) {
       return res.status(400).json({
@@ -3073,15 +3075,16 @@ app.post("/create-cabinet", async (req, res) => {
 
     const cabinetInsert = await pool.query(
       `
-      INSERT INTO cabinets (nom, adresse, telephone)
-      VALUES ($1, $2, $3)
-      RETURNING id, nom, adresse, telephone
+      INSERT INTO cabinets (nom, adresse, telephone, ville)
+VALUES ($1, $2, $3, $4)
+RETURNING id, nom, adresse, telephone, ville
       `,
       [
-        String(nom_cabinet).trim(),
-        adresse ? String(adresse).trim() : null,
-        telephone ? String(telephone).trim() : null,
-      ]
+  String(nom_cabinet).trim(),
+  adresse ? String(adresse).trim() : null,
+  telephone ? String(telephone).trim() : null,
+  ville ? String(ville).trim() : null,
+]
     );
 
     const cabinet = cabinetInsert.rows[0];
