@@ -1187,6 +1187,7 @@ app.get("/patients/:id/consultations", authRequired, staff, async (req, res) => 
 });
 
 
+
 app.post("/consultations", authRequired, medecinOrAdmin, async (req, res) => {
   try {
     const {
@@ -1518,7 +1519,92 @@ app.get("/patients/:id/imagerie", authRequired, staff, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.post("/analyses", authRequired, medecinOrAdmin, upload.single("file"), async (req, res) => {
+  try {
+    const cols = await getTableColumns("analyses");
 
+    const patient_id = req.body.patient_id ? Number(req.body.patient_id) : null;
+    const consultation_id = req.body.consultation_id ? Number(req.body.consultation_id) : null;
+    const medecin_id = req.user.id;
+
+    const type_analyse = req.body.type_analyse || req.body.nom || "Analyse";
+    const remarque = req.body.remarque || req.body.resultat || req.body.contenu || "";
+    const date_analyse = req.body.date_analyse || null;
+    const laboratoire = req.body.laboratoire || null;
+    const date_resultat = req.body.date_resultat || null;
+    const conclusion = req.body.conclusion || null;
+
+    if (!patient_id) {
+      return res.status(400).json({ error: "patient_id obligatoire" });
+    }
+
+    const p = await pool.query(
+      `
+      SELECT p.id, p.patient_app_id
+      FROM patients p
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE p.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [patient_id, req.user.cabinet_id]
+    );
+
+    if (p.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
+    const patient_app_id = p.rows[0]?.patient_app_id || null;
+
+    const insertCols = [];
+    const insertVals = [];
+    const params = [];
+
+    const push = (col, val) => {
+      if (!cols.has(col)) return;
+      insertCols.push(col);
+      params.push(val);
+      insertVals.push(`$${params.length}`);
+    };
+
+    push("patient_id", patient_id);
+    push("patient_app_id", patient_app_id);
+    push("medecin_id", medecin_id);
+    if (consultation_id) push("consultation_id", consultation_id);
+
+    push("nom", type_analyse);
+    push("type_analyse", type_analyse);
+    if (date_analyse) push("date_analyse", date_analyse);
+
+    push("contenu", remarque);
+    push("remarque", remarque);
+
+    if (laboratoire) push("laboratoire", laboratoire);
+    if (date_resultat) push("date_resultat", date_resultat);
+    if (conclusion) push("conclusion", conclusion);
+
+    if (req.file) {
+      const savedPath = `/uploads/${req.file.filename}`;
+      const fileCol = ["chemin_fichier", "fichier", "file", "path", "url", "contenu"].find((c) => cols.has(c));
+      if (fileCol) push(fileCol, savedPath);
+    }
+
+    if (insertCols.length === 0) {
+      return res.status(400).json({ error: "Aucune colonne compatible trouvée dans analyses" });
+    }
+
+    const q = `
+      INSERT INTO analyses (${insertCols.join(", ")})
+      VALUES (${insertVals.join(", ")})
+      RETURNING *
+    `;
+
+    const result = await pool.query(q, params);
+    return res.json(result.rows[0]);
+  } catch (err) {
+    console.log("POST /analyses ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
 app.post("/imagerie", authRequired, medecinOrAdmin, upload.single("file"), async (req, res) => {
   try {
     const patient_id = req.body?.patient_id ? Number(req.body.patient_id) : null;
