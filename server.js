@@ -310,30 +310,17 @@ app.post("/patient/register", async (req, res) => {
     }
 
     const exist = await pool.query(
-      "SELECT * FROM patients WHERE telephone=$1 OR email=$2 LIMIT 1",
-      [telephone, email]
-    );
+  "SELECT id FROM patients WHERE telephone=$1 OR email=$2 LIMIT 1",
+  [telephone, email]
+);
 
-    const hash = await bcrypt.hash(password, 10);
+if (exist.rows.length > 0) {
+  return res.status(409).json({
+    error: "Ce numéro de téléphone ou cet email existe déjà"
+  });
+}
 
-    if (exist.rows.length > 0) {
-      const patient = exist.rows[0];
-
-      const updated = await pool.query(
-        `UPDATE patients
-         SET nom = COALESCE($1, nom),
-             prenom = COALESCE($2, prenom),
-             telephone = $3,
-             email = $4,
-             password_hash = $5
-         WHERE id = $6
-         RETURNING id, patient_app_id`,
-        [nom, prenom, telephone, email, hash, patient.id]
-      );
-
-      return res.json({ success: true, patient: updated.rows[0] });
-    }
-
+const hash = await bcrypt.hash(password, 10);
     const r = await pool.query(
       `INSERT INTO patients(nom, prenom, telephone, email, password_hash, cabinet_id, is_mobile_account)
        VALUES($1,$2,$3,$4,$5,$6,true)
