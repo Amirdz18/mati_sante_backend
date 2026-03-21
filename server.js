@@ -2618,7 +2618,12 @@ app.post("/rdv", async (req, res) => {
     console.log("Téléphone patient :", telephone);
 
     const patientResult = await pool.query(
-      `SELECT id FROM patients WHERE telephone = $1 LIMIT 1`,
+      `
+      SELECT id, patient_app_id
+      FROM patients
+      WHERE telephone = $1
+      LIMIT 1
+      `,
       [telephone]
     );
 
@@ -2627,28 +2632,47 @@ app.post("/rdv", async (req, res) => {
     }
 
     const patientId = patientResult.rows[0].id;
+    const patientAppId = patientResult.rows[0].patient_app_id || null;
 
     await pool.query(
-  `INSERT INTO documents (patient_id, titre, contenu, nom, created_at)
-   VALUES ($1, $2, $3, $4, NOW())`,
-  [
-    patientId,
-    file.originalname,
-    `/uploads/${file.filename}`,
-    file.filename,
-  ]
-);
+      `
+      INSERT INTO analyses (
+        patient_id,
+        patient_app_id,
+        nom,
+        type_analyse,
+        date_analyse,
+        laboratoire,
+        date_resultat,
+        remarque,
+        conclusion,
+        chemin_fichier,
+        created_at
+      )
+      VALUES (
+        $1, $2, $3, $4, NOW()::date, NULL, NULL, NULL, NULL, $5, NOW()
+      )
+      `,
+      [
+        patientId,
+        patientAppId,
+        file.originalname,
+        "Analyse envoyée depuis mobile",
+        `/uploads/${file.filename}`,
+      ]
+    );
 
-    res.json({
+    return res.json({
       success: true,
       fichier: file.filename,
       patient_id: patientId,
     });
   } catch (err) {
     console.log("UPLOAD PATIENT ERROR:", err.message);
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
+
 // =========================================================
 // UPDATE RDV + SMS modification
 // =========================================================
