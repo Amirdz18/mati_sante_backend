@@ -1878,7 +1878,7 @@ app.post("/documents/send-existing-file", authRequired, medecinOrAdmin, async (r
     console.log("SEND EXISTING FILE ERROR:", err.message);
     return res.status(500).json({ error: err.message });
   }
-});
+});  
 
 app.delete("/ordonnances/:id", authRequired, staff, async (req, res) => {
   const { id } = req.params;
@@ -2763,20 +2763,25 @@ app.put("/rdv/:id", authRequired, async (req, res) => {
 // =========================================================
 // DELETE RDV (delete réel)
 // =========================================================
-app.delete("/rdv/:id", async (req, res) => {
+app.delete("/rdv/:id", authRequired, async (req, res) => {
   try {
     const { id } = req.params;
-    const r = await pool.query(
-  "DELETE FROM rendez_vous WHERE id=$1 AND cabinet_id=$2 RETURNING id",
-  [id, req.user.cabinet_id]
-);
 
-    if (r.rows.length === 0) return res.status(404).json({ error: "RDV introuvable" });
+    const r = await pool.query(
+      "DELETE FROM rendez_vous WHERE id=$1 AND cabinet_id=$2 RETURNING id",
+      [id, req.user.cabinet_id]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: "RDV introuvable" });
+    }
+
     res.json({ message: "RDV supprimé ✅" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 // =========================================================
 // CRENEAUX LIBRES JOUR
 // =========================================================
