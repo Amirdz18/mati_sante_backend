@@ -300,6 +300,39 @@ app.post("/auth/login", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+app.post("/reset-medecin-password-temp", async (req, res) => {
+  try {
+    const { email, newPassword } = req.body || {};
+
+    if (!email || !newPassword) {
+      return res.status(400).json({ error: "email et newPassword obligatoires" });
+    }
+
+    const hashed = await bcrypt.hash(String(newPassword), 10);
+
+    const r = await pool.query(
+      `
+      UPDATE medecins
+      SET password_hash = $1
+      WHERE email = $2
+      RETURNING id, nom, email, cabinet_id
+      `,
+      [hashed, String(email).trim().toLowerCase()]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: "Médecin introuvable" });
+    }
+
+    return res.json({
+      ok: true,
+      message: "Mot de passe réinitialisé",
+      user: r.rows[0],
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
 // PATIENT REGISTER
 app.post("/patient/register", async (req, res) => {
   try {
