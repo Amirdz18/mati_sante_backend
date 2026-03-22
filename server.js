@@ -2634,45 +2634,57 @@ app.post("/rdv", async (req, res) => {
     const patientId = patientResult.rows[0].id;
     const patientAppId = patientResult.rows[0].patient_app_id || null;
 
+    const cols = await getTableColumns("analyses");
+
+    const fields = [];
+    const values = [];
+    const params = [];
+
+    const pushField = (name, value) => {
+      if (cols.has(name)) {
+        fields.push(name);
+        params.push(value);
+        values.push(`$${params.length}`);
+      }
+    };
+
+    pushField("patient_id", patientId);
+    pushField("patient_app_id", patientAppId);
+    pushField("nom", file.originalname);
+    pushField("type_analyse", "Analyse envoyée depuis mobile");
+    pushField("laboratoire", null);
+    pushField("date_resultat", null);
+    pushField("remarque", null);
+    pushField("conclusion", null);
+    pushField("chemin_fichier", `/uploads/${file.filename}`);
+    pushField("fichier", `/uploads/${file.filename}`);
+    pushField("url", `/uploads/${file.filename}`);
+    pushField("contenu", `/uploads/${file.filename}`);
+
+    if (cols.has("created_at")) {
+      fields.push("created_at");
+      values.push("NOW()");
+    }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ error: "Aucune colonne compatible trouvée dans analyses" });
+    }
+
     await pool.query(
-      `
-      INSERT INTO analyses (
-        patient_id,
-        patient_app_id,
-        nom,
-        type_analyse,
-        date_analyse,
-        laboratoire,
-        date_resultat,
-        remarque,
-        conclusion,
-        chemin_fichier,
-        created_at
-      )
-      VALUES (
-        $1, $2, $3, $4, NOW()::date, NULL, NULL, NULL, NULL, $5, NOW()
-      )
-      `,
-      [
-        patientId,
-        patientAppId,
-        file.originalname,
-        "Analyse envoyée depuis mobile",
-        `/uploads/${file.filename}`,
-      ]
+      `INSERT INTO analyses (${fields.join(", ")}) VALUES (${values.join(", ")})`,
+      params
     );
 
     return res.json({
       success: true,
       fichier: file.filename,
-      patient_id: patientId,
+      patient_id: patientId
     });
   } catch (err) {
     console.log("UPLOAD PATIENT ERROR:", err.message);
     return res.status(500).json({ error: err.message });
   }
 });
-
 // =========================================================
 // UPDATE RDV + SMS modification
 // =========================================================
