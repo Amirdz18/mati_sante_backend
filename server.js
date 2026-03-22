@@ -3756,6 +3756,215 @@ app.get("/patient/:id/conversations", async (req, res) => {
     return res.status(500).json({ error: "erreur serveur" });
   }
 });
+app.post("/avis-medicaux", authRequired, async (req, res) => {
+  try {
+    const { patient_id, destinataire_id, objet, message } = req.body || {};
+
+    if (!req.user?.id || !req.user?.cabinet_id) {
+      return res.status(401).json({ error: "Utilisateur non authentifié" });
+    }
+
+    if (!patient_id || !destinataire_id || !objet || !message) {
+      return res.status(400).json({ error: "patient_id, destinataire_id, objet et message requis" });
+    }
+
+    const patientCheck = await pool.query(
+      `
+      SELECT p.id
+      FROM patients p
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE p.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [patient_id, req.user.cabinet_id]
+    );
+
+    if (patientCheck.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable dans ce cabinet" });
+    }
+
+    const avisResult = await pool.query(
+      `
+      INSERT INTO avis_medicaux (
+        patient_id,
+        cabinet_id,
+        demandeur_id,
+        destinataire_id,
+        objet,
+        statut,
+        created_at
+      )
+      VALUES ($1, $2, $3, $4, $5, 'en_attente', NOW())
+      RETURNING *
+      `,
+      [patient_id, req.user.cabinet_id, req.user.id, destinataire_id, objet]
+    );
+
+    const avis = avisResult.rows[0];
+
+    await pool.query(
+      `
+      INSERT INTO avis_messages (
+        avis_id,
+        auteur_id,
+        message,
+        created_at
+      )
+      VALUES ($1, $2, $3, NOW())
+      `,
+      [avis.id, req.user.id, message]
+    );
+
+    return res.json({
+      success: true,
+      avis
+    });
+  } catch (err) {
+    console.log("CREATE AVIS ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});app.get("/avis-medicaux", authRequired, async (req, res) => {
+  try {
+    if (!req.user?.id || !req.user?.cabinet_id) {
+      return res.status(401).json({ error: "Utilisateur non authentifié" });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        a.*,
+        p.nom AS patient_nom,
+        p.prenom AS patient_prenom,
+        md.nom AS demandeur_nom,
+        md.prenom AS demandeur_prenom,
+        mt.nom AS destinataire_nom,
+        mt.prenom AS destinataire_prenom
+      FROM avis_medicaux a
+      LEFT JOIN patients p ON p.id = a.patient_id
+      LEFT JOIN medecins md ON md.id = a.demandeur_id
+      LEFT JOIN medecins mt ON mt.id = a.destinataire_id
+      WHERE a.cabinet_id = $1
+        AND (a.demandeur_id = $2 OR a.destinataire_id = $2)
+      ORDER BY a.created_at DESC
+      `,
+      [req.user.cabinet_id, req.user.id]
+    );
+
+    return res.json(result.rows);
+  } catch (err) {
+    console.log("LIST AVIS ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+app.get("/avis-medicaux/:id/messages", authRequired, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!req.user?.id || !req.user?.cabinet_id) {
+      return res.status(401).json({ error: "Utilisateur non authentifié" });
+    }
+
+    const avisCheck = await pool.query(
+      `
+      SELECT id
+      FROM avis_medicaux
+      WHERE id = $1
+        AND cabinet_id = $2
+        AND (demandeur_id = $3 OR destinataire_id = $3)
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id, req.user.id]
+    );
+
+    if (avisCheck.rows.length === 0) {
+      return res.status(404).json({ error: "Avis introuvable" });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        m.*,
+        med.nom AS auteur_nom,
+        med.prenom AS auteur_prenom
+      FROM avis_messages m
+      LEFT JOIN medecins med ON med.id = m.auteur_id
+      WHERE m.avis_id = $1
+      ORDER BY m.created_at ASC
+      `,
+      [id]
+    );
+
+    return res.json(result.rows);
+  } catch (err) {
+    console.log("GET AVIS MESSAGES ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+app.post("/avis-medicaux/:id/messages", authRequired, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { message } = req.body || {};
+
+    if (!req.user?.id || !req.user?.cabinet_id) {
+      return res.status(401).json({ error: "Utilisateur non authentifié" });
+    }
+
+    if (!message || !String(message).trim()) {
+      return res.status(400).json({ error: "Message requis" });
+    }
+
+    const avisCheck = await pool.query(
+      `
+      SELECT *
+      FROM avis_medicaux
+      WHERE id = $1
+        AND cabinet_id = $2
+        AND (demandeur_id = $3 OR destinataire_id = $3)
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id, req.user.id]
+    );
+
+    if (avisCheck.rows.length === 0) {
+      return res.status(404).json({ error: "Avis introuvable" });
+    }
+
+    const avis = avisCheck.rows[0];
+
+    const msgResult = await pool.query(
+      `
+      INSERT INTO avis_messages (
+        avis_id,
+        auteur_id,
+        message,
+        created_at
+      )
+      VALUES ($1, $2, $3, NOW())
+      RETURNING *
+      `,
+      [id, req.user.id, String(message).trim()]
+    );
+
+    if (avis.statut === "en_attente" && String(avis.destinataire_id) === String(req.user.id)) {
+      await pool.query(
+        `
+        UPDATE avis_medicaux
+        SET statut = 'repondu'
+        WHERE id = $1
+        `,
+        [id]
+      );
+    }
+
+    return res.json({
+      success: true,
+      messageData: msgResult.rows[0]
+    });
+  } catch (err) {
+    console.log("POST AVIS MESSAGE ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
 });
