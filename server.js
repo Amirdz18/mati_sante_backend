@@ -3965,22 +3965,7 @@ app.post("/avis-medicaux/:id/messages", authRequired, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-app.get("/plateforme/cabinets", authRequired, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `
-      SELECT id, nom, adresse, telephone, email
-      FROM cabinets
-      ORDER BY nom ASC
-      `
-    );
 
-    return res.json(result.rows);
-  } catch (err) {
-    console.log("GET CABINETS PLATEFORME ERROR:", err.message);
-    return res.status(500).json({ error: err.message });
-  }
-});
 app.get("/plateforme/cabinets", authRequired, async (req, res) => {
   try {
     const result = await pool.query(
