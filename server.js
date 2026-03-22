@@ -3981,26 +3981,24 @@ app.get("/plateforme/cabinets", authRequired, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-app.get("/plateforme/cabinets/:id/medecins", authRequired, async (req, res) => {
+app.get("/plateforme/cabinets", authRequired, async (req, res) => {
   try {
-    const { id } = req.params;
-
     const result = await pool.query(
       `
-      SELECT id, nom, email
-      FROM medecins
-      WHERE cabinet_id = $1
+      SELECT id, nom, adresse, telephone, ville
+      FROM cabinets
       ORDER BY nom ASC
-      `,
-      [id]
+      `
     );
 
     return res.json(result.rows);
   } catch (err) {
-    console.log("GET MEDECINS CABINET ERROR:", err.message);
+    console.log("GET CABINETS PLATEFORME ERROR:", err.message);
     return res.status(500).json({ error: err.message });
   }
 });
+
+
 
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
