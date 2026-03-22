@@ -3836,9 +3836,9 @@ app.post("/avis-medicaux", authRequired, async (req, res) => {
         p.nom AS patient_nom,
         p.prenom AS patient_prenom,
         md.nom AS demandeur_nom,
-        md.prenom AS demandeur_prenom,
-        mt.nom AS destinataire_nom,
-        mt.prenom AS destinataire_prenom
+       NULL AS demandeur_prenom,
+       mt.nom AS destinataire_nom,
+       NULL AS destinataire_prenom
       FROM avis_medicaux a
       LEFT JOIN patients p ON p.id = a.patient_id
       LEFT JOIN medecins md ON md.id = a.demandeur_id
