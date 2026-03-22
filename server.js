@@ -4003,8 +4003,44 @@ app.get("/plateforme/cabinets/:id/medecins", authRequired, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+app.delete("/avis-medicaux/:id", authRequired, async (req, res) => {
+  try {
+    const { id } = req.params;
 
+    if (!req.user?.id || !req.user?.cabinet_id) {
+      return res.status(401).json({ error: "Utilisateur non authentifié" });
+    }
 
+    const check = await pool.query(
+      `
+      SELECT id
+      FROM avis_medicaux
+      WHERE id = $1
+        AND cabinet_id = $2
+        AND (demandeur_id = $3 OR destinataire_id = $3)
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id, req.user.id]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: "Avis introuvable" });
+    }
+
+    await pool.query(
+      `
+      DELETE FROM avis_medicaux
+      WHERE id = $1
+      `,
+      [id]
+    );
+
+    return res.json({ success: true, message: "Avis supprimé ✅" });
+  } catch (err) {
+    console.log("DELETE AVIS ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 
 app.listen(PORT, () => {
