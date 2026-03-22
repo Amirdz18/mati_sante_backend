@@ -3985,6 +3985,7 @@ app.get("/plateforme/cabinets", authRequired, async (req, res) => {
 
 
 
+
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
 });
