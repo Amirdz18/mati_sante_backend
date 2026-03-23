@@ -4041,6 +4041,32 @@ app.delete("/avis-medicaux/:id", authRequired, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+app.get("/rdv-mobile/occupied", async (req, res) => {
+  try {
+    const { cabinet_id, date } = req.query;
+
+    if (!cabinet_id || !date) {
+      return res.status(400).json({ error: "cabinet_id et date sont obligatoires" });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT id, date_rdv, heure_debut, heure, heure_rdv, statut
+      FROM rdv
+      WHERE cabinet_id = $1
+        AND DATE(COALESCE(date_rdv, date)) = DATE($2)
+        AND COALESCE(statut, 'demande') NOT IN ('annule', 'termine')
+      ORDER BY COALESCE(heure_debut, heure, heure_rdv) ASC
+      `,
+      [cabinet_id, date]
+    );
+
+    return res.json(result.rows);
+  } catch (err) {
+    console.log("RDV MOBILE OCCUPIED ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 
 app.listen(PORT, () => {
