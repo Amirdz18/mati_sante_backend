@@ -4075,6 +4075,32 @@ app.get("/rdv-mobile/occupied", async (req, res) => {
   }
 });
 
+app.delete("/messages/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await pool.query("DELETE FROM messages WHERE id = $1", [id]);
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.delete("/patient/:patientId/conversations/:cabinetId", async (req, res) => {
+  try {
+    const { patientId, cabinetId } = req.params;
+
+    await pool.query(
+      `DELETE FROM messages
+       WHERE patient_id = $1 AND cabinet_id = $2`,
+      [patientId, cabinetId]
+    );
+
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 
 
