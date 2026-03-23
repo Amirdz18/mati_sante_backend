@@ -4054,7 +4054,7 @@ app.get("/rdv-mobile/occupied", async (req, res) => {
       SELECT heure
       FROM rdv
       WHERE cabinet_id = $1
-      AND DATE(date) = $2
+      AND DATE(date_rdv) = $2
       `,
       [cabinet_id, date]
     );
