@@ -2523,14 +2523,18 @@ app.post("/rdv", async (req, res) => {
     }
 
     // Vérifier conflit seulement si date + heure_debut sont fournies
-    if (date_rdv && heure_debut) {
+    const dateFinal = date_rdv || date;
+const heureFinal = heure_debut || heure;
+
+if (dateFinal && heureFinal) {
+
       const conflict = await checkRdvConflict({
-        date_rdv,
-        heure_debut,
-        heure_fin: heure_fin || null,
-        cabinet_id,
-        excludeId: null,
-      });
+  date_rdv: dateFinal,
+  heure_debut: heureFinal,
+  heure_fin: heure_fin || null,
+  cabinet_id,
+  excludeId: null,
+});
 
       if (conflict) {
         return res.status(409).json({ error: "Créneau déjà occupé (conflit RDV) ❌" });
