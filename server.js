@@ -2485,7 +2485,9 @@ app.post("/rdv", async (req, res) => {
       patient_telephone,
       source,
       date_rdv,
+      date,
       heure_debut,
+      heure,
       heure_fin,
       motif,
       statut,
@@ -2493,23 +2495,32 @@ app.post("/rdv", async (req, res) => {
     } = req.body;
 
     const cabinet_id = Number(req.body.cabinet_id) || 1;
-  
-   
+
+    // Compatibilité PC + mobile
+    const dateFinal = date_rdv || date || null;
+    const heureDebutFinal = heure_debut || heure || null;
+
     // Date/heure facultatives pour demande mobile
-    if (date_rdv && !isValidISODate(date_rdv)) {
-      return res.status(400).json({ error: "date_rdv invalide (YYYY-MM-DD)" });
+    if (dateFinal && !isValidISODate(dateFinal)) {
+      return res.status(400).json({ error: "date invalide (YYYY-MM-DD)" });
     }
 
-    if (heure_debut && !isValidTime(heure_debut)) {
-      return res.status(400).json({ error: "heure_debut invalide (HH:MM)" });
+    if (heureDebutFinal && !isValidTime(heureDebutFinal)) {
+      return res.status(400).json({ error: "heure invalide (HH:MM)" });
     }
 
     if (heure_fin && !isValidTime(heure_fin)) {
       return res.status(400).json({ error: "heure_fin invalide (HH:MM)" });
     }
 
-    if (heure_fin && heure_debut && String(heure_fin) <= String(heure_debut)) {
-      return res.status(400).json({ error: "heure_fin doit être > heure_debut" });
+    if (
+      heure_fin &&
+      heureDebutFinal &&
+      String(heure_fin) <= String(heureDebutFinal)
+    ) {
+      return res
+        .status(400)
+        .json({ error: "heure_fin doit être > heure_debut" });
     }
 
     const hasPatientId = !!patient_id;
@@ -2522,48 +2533,44 @@ app.post("/rdv", async (req, res) => {
       }
     }
 
-    // Vérifier conflit seulement si date + heure_debut sont fournies
-    const dateFinal = date_rdv || date;
-const heureFinal = heure_debut || heure;
-
-if (dateFinal && heureFinal) {
-
+    // Vérifier conflit seulement si date + heure sont fournies
+    if (dateFinal && heureDebutFinal) {
       const conflict = await checkRdvConflict({
-  date_rdv: dateFinal,
-  heure_debut: heureFinal,
-  heure_fin: heure_fin || null,
-  cabinet_id,
-  excludeId: null,
-});
+        date_rdv: dateFinal,
+        heure_debut: heureDebutFinal,
+        heure_fin: heure_fin || null,
+        cabinet_id,
+        excludeId: null,
+      });
 
       if (conflict) {
-        return res.status(409).json({ error: "Créneau déjà occupé (conflit RDV) ❌" });
+        return res
+          .status(409)
+          .json({ error: "Créneau déjà occupé (conflit RDV) ❌" });
       }
     }
 
     const ins = await pool.query(
-  `INSERT INTO rendez_vous
-   (patient_id, patient_nom, patient_prenom, patient_telephone, source,
-    date_rdv, heure_debut, heure_fin, motif, statut, notes, cabinet_id)
-   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-   RETURNING id`,
-  [
-    hasPatientId ? Number(patient_id) : null,
-    patient_nom || null,
-    patient_prenom || null,
-    patient_telephone || null,
-    source || (hasPatientId ? "logiciel" : "mobile"),
-    date_rdv || null,
-    heure_debut || null,
-    heure_fin || null,
-    motif || null,
-    statut || "demande",
-    notes || null,
-    cabinet_id,
-  ]
-);
-
-
+      `INSERT INTO rendez_vous
+       (patient_id, patient_nom, patient_prenom, patient_telephone, source,
+        date_rdv, heure_debut, heure_fin, motif, statut, notes, cabinet_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       RETURNING id`,
+      [
+        hasPatientId ? Number(patient_id) : null,
+        patient_nom || null,
+        patient_prenom || null,
+        patient_telephone || null,
+        source || (hasPatientId ? "logiciel" : "mobile"),
+        dateFinal,
+        heureDebutFinal,
+        heure_fin || null,
+        motif || null,
+        statut || "demande",
+        notes || null,
+        cabinet_id,
+      ]
+    );
 
     const out = await selectRdvJoinedById(ins.rows[0].id);
 
@@ -2572,8 +2579,8 @@ if (dateFinal && heureFinal) {
       try {
         if (!out?.telephone) return;
         const msg = formatRdvSms(out, "create");
-
         const hasFlag = await hasSmsConfirmFlagColumn();
+
         if (!hasFlag) {
           await sendSms(out.telephone, msg);
           return;
@@ -2600,59 +2607,14 @@ if (dateFinal && heureFinal) {
     res.json(out);
   } catch (err) {
     if (String(err.code) === "23P01") {
-      return res.status(409).json({ error: "Créneau déjà occupé (conflit RDV) ❌" });
+      return res
+        .status(409)
+        .json({ error: "Créneau déjà occupé (conflit RDV) ❌" });
     }
     res.status(500).json({ error: err.message });
   }
 });
- app.post("/upload-patient", patientUpload.single("file"), async (req, res) => {
-  try {
-    const file = req.file;
-    const { telephone } = req.body;
 
-    if (!file) {
-      return res.status(400).json({ error: "Aucun fichier" });
-    }
-
-    if (!telephone) {
-      return res.status(400).json({ error: "Téléphone manquant" });
-    }
-
-    console.log("Fichier reçu :", file.filename);
-    console.log("Téléphone patient :", telephone);
-
-    const patientResult = await pool.query(
-      `SELECT id FROM patients WHERE telephone = $1 LIMIT 1`,
-      [telephone]
-    );
-
-    if (patientResult.rows.length === 0) {
-      return res.status(404).json({ error: "Patient introuvable avec ce téléphone" });
-    }
-
-    const patientId = patientResult.rows[0].id;
-
-    await pool.query(
-      `INSERT INTO documents (patient_id, titre, contenu, nom, created_at)
-       VALUES ($1, $2, $3, $4, NOW())`,
-      [
-        patientId,
-        file.originalname,
-        `/uploads/${file.filename}`,
-        file.filename,
-      ]
-    );
-
-    return res.json({
-      success: true,
-      fichier: file.filename,
-      patient_id: patientId,
-    });
-  } catch (err) {
-    console.log("UPLOAD PATIENT ERROR:", err.message);
-    return res.status(500).json({ error: err.message });
-  }
-});
 // =========================================================
 // UPDATE RDV + SMS modification
 // =========================================================
