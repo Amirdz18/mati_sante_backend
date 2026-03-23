@@ -4075,17 +4075,7 @@ app.get("/rdv-mobile/occupied", async (req, res) => {
   }
 });
 
-app.delete("/messages/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
 
-    await pool.query("DELETE FROM messages WHERE id = $1", [id]);
-
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 app.delete("/patient/:patientId/conversations/:cabinetId", async (req, res) => {
   try {
     const { patientId, cabinetId } = req.params;
@@ -4102,7 +4092,17 @@ app.delete("/patient/:patientId/conversations/:cabinetId", async (req, res) => {
   }
 });
 
+app.delete("/messages/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
 
+    await pool.query("DELETE FROM messages WHERE id = $1", [id]);
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
