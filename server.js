@@ -3604,6 +3604,51 @@ app.post("/messages", authRequired, staff, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.post("/upload-patient", patientUpload.single("file"), async (req, res) => {
+  try {
+    const file = req.file;
+    const { telephone } = req.body;
+
+    if (!file) {
+      return res.status(400).json({ error: "Aucun fichier" });
+    }
+
+    if (!telephone) {
+      return res.status(400).json({ error: "Téléphone manquant" });
+    }
+
+    const patientResult = await pool.query(
+      `SELECT id FROM patients WHERE telephone = $1 LIMIT 1`,
+      [telephone]
+    );
+
+    if (patientResult.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable avec ce téléphone" });
+    }
+
+    const patientId = patientResult.rows[0].id;
+
+    await pool.query(
+      `INSERT INTO documents (patient_id, titre, contenu, nom, created_at)
+       VALUES ($1, $2, $3, $4, NOW())`,
+      [
+        patientId,
+        file.originalname,
+        `/uploads/${file.filename}`,
+        file.filename,
+      ]
+    );
+
+    return res.json({
+      success: true,
+      fichier: file.filename,
+      patient_id: patientId,
+    });
+  } catch (err) {
+    console.log("UPLOAD PATIENT ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
 app.delete("/patient/documents/:id", async (req, res) => {
   try {
     const { id } = req.params;
