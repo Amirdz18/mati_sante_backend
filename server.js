@@ -4096,12 +4096,13 @@ app.delete("/patient/:patientId/conversations/:cabinetId", async (req, res) => {
 app.delete("/patient/message/:id", async (req, res) => {
   try {
     const { id } = req.params;
+    const { patient_id } = req.body;
 
     console.log("DELETE MESSAGE ID:", id); // 👈 debug
 
     const result = await pool.query(
-      "DELETE FROM messages WHERE id = $1 RETURNING *",
-      [id]
+      "DELETE FROM messages WHERE id = $1 AND patient_id = $2 RETURNING *",
+[id, patient_id]
     );
 
     if (result.rowCount === 0) {
