@@ -4057,22 +4057,20 @@ app.get("/rdv-mobile/occupied", async (req, res) => {
     const { cabinet_id, date } = req.query;
 
     if (!cabinet_id || !date) {
-      return res.status(400).json({ error: "Paramètres manquants" });
+      return res.status(400).json({ error: "cabinet_id et date requis" });
     }
 
     const result = await pool.query(
-      `
-      SELECT heure
-      FROM rdv
-      WHERE cabinet_id = $1
-      AND DATE(date_rdv) = $2
-      `,
+      `SELECT heure_debut 
+       FROM rendez_vous 
+       WHERE cabinet_id = $1 
+       AND date_rdv = $2`,
       [cabinet_id, date]
     );
 
     res.json(result.rows);
   } catch (err) {
-    console.error("ERROR occupied:", err.message);
+    console.log("ERROR occupied:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
