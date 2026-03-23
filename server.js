@@ -4092,15 +4092,26 @@ app.delete("/patient/:patientId/conversations/:cabinetId", async (req, res) => {
   }
 });
 
-app.delete("/messages/:id", async (req, res) => {
+
+app.delete("/patient/message/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    await pool.query("DELETE FROM messages WHERE id = $1", [id]);
+    console.log("DELETE MESSAGE ID:", id); // 👈 debug
 
-    res.json({ success: true });
+    const result = await pool.query(
+      "DELETE FROM messages WHERE id = $1 RETURNING *",
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Message introuvable" });
+    }
+
+    return res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.log("DELETE ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 
