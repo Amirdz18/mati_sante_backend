@@ -4046,27 +4046,27 @@ app.get("/rdv-mobile/occupied", async (req, res) => {
     const { cabinet_id, date } = req.query;
 
     if (!cabinet_id || !date) {
-      return res.status(400).json({ error: "cabinet_id et date sont obligatoires" });
+      return res.status(400).json({ error: "Paramètres manquants" });
     }
 
     const result = await pool.query(
       `
-      SELECT id, date_rdv, heure_debut, heure, heure_rdv, statut
+      SELECT heure
       FROM rdv
       WHERE cabinet_id = $1
-        AND DATE(COALESCE(date_rdv, date)) = DATE($2)
-        AND COALESCE(statut, 'demande') NOT IN ('annule', 'termine')
-      ORDER BY COALESCE(heure_debut, heure, heure_rdv) ASC
+      AND DATE(date) = $2
       `,
       [cabinet_id, date]
     );
 
-    return res.json(result.rows);
+    res.json(result.rows);
   } catch (err) {
-    console.log("RDV MOBILE OCCUPIED ERROR:", err.message);
-    return res.status(500).json({ error: err.message });
+    console.error("ERROR occupied:", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
+
+
 
 
 app.listen(PORT, () => {
