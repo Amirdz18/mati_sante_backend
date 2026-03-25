@@ -3583,9 +3583,10 @@ app.get("/messages", authRequired, staff, async (req, res) => {
 });
 app.post("/messages", authRequired, staff, async (req, res) => {
   try {
-    const { patient_id, contenu } = req.body;
+    const patient_id = req.body.patient_id;
+    const contenu = req.body.contenu || req.body.message || "";
 
-    if (!patient_id || !contenu) {
+    if (!patient_id || !contenu.trim()) {
       return res.status(400).json({ error: "patient_id et contenu requis" });
     }
 
@@ -4115,7 +4116,13 @@ app.delete("/patient/message/:id", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+app.get("/dashboard/messages-count", async (req, res) => {
+  const result = await db.query(
+    "SELECT COUNT(*) FROM messages WHERE contenu IS NOT NULL AND contenu <> ''"
+  );
 
+  res.json({ count: Number(result.rows[0].count) });
+});
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
 });
