@@ -1167,7 +1167,12 @@ app.delete("/messages/:id", authRequired, staff, async (req, res) => {
 
   try {
     const r = await pool.query(
-      "DELETE FROM messages WHERE id = $1 AND cabinet_id = $2 RETURNING *",
+      `
+      UPDATE messages
+      SET lu = true
+      WHERE id = $1 AND cabinet_id = $2
+      RETURNING *
+      `,
       [id, req.user.cabinet_id]
     );
 
@@ -1175,7 +1180,7 @@ app.delete("/messages/:id", authRequired, staff, async (req, res) => {
       return res.status(404).json({ error: "Message introuvable" });
     }
 
-    return res.json({ success: true, deleted: r.rows[0] });
+    return res.json({ success: true, updated: r.rows[0] });
   } catch (err) {
     console.error("DELETE MESSAGE ERROR:", err.message);
     return res.status(500).json({ error: err.message });
