@@ -4118,7 +4118,11 @@ app.delete("/patient/message/:id", async (req, res) => {
 });
 app.get("/dashboard/messages-count", async (req, res) => {
   const result = await db.query(
-    "SELECT COUNT(*) FROM messages WHERE contenu IS NOT NULL AND contenu <> ''"
+    `
+    SELECT COUNT(*) 
+    FROM messages 
+    WHERE sender = 'patient'
+    `
   );
 
   res.json({ count: Number(result.rows[0].count) });
