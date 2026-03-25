@@ -4118,17 +4118,18 @@ app.delete("/patient/message/:id", async (req, res) => {
 });
 app.get("/dashboard/messages-count", authRequired, async (req, res) => {
   try {
-    const result = await pool.query(
-      `
-      SELECT COUNT(*) 
-      FROM messages 
-      WHERE sender = 'patient'
-      AND cabinet_id = $1
-      AND contenu IS NOT NULL
-      AND TRIM(contenu) <> ''
-      `,
-      [req.user.cabinet_id]
-    );
+   const result = await pool.query(
+  `
+  SELECT COUNT(*) 
+  FROM messages 
+  WHERE sender = 'patient'
+  AND cabinet_id = $1
+  AND lu = false
+  AND contenu IS NOT NULL
+  AND TRIM(contenu) <> ''
+  `,
+  [req.user.cabinet_id]
+);
 
     res.json({
       count: Number(result.rows[0].count),
