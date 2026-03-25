@@ -4145,6 +4145,32 @@ app.get("/dashboard/messages-count", authRequired, async (req, res) => {
   }
 });
 
+app.post("/messages/mark-read", authRequired, staff, async (req, res) => {
+  const patient_id = Number(req.query.patient_id);
+
+  if (!patient_id) {
+    return res.status(400).json({ error: "patient_id invalide" });
+  }
+
+  try {
+    await pool.query(
+      `
+      UPDATE messages
+      SET lu = true
+      WHERE patient_id = $1
+        AND cabinet_id = $2
+        AND sender = 'patient'
+        AND lu = false
+      `,
+      [patient_id, req.user.cabinet_id]
+    );
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.log("MARK READ MESSAGES ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
