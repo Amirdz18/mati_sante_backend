@@ -34,7 +34,9 @@ const patientUploadStorage = multer.diskStorage({
 
 const patientUpload = multer({ storage: patientUploadStorage });
 
-app.use("/uploads", express.static("uploads"));
+const path = require("path");
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 
 console.log("✅ SERVER.JS VERSION:", new Date().toISOString());
@@ -513,7 +515,6 @@ app.get("/patient/:id/documents", async (req, res) => {
       SELECT *
       FROM documents
       WHERE patient_id = $1
-        AND COALESCE(source_document, 'patient') = 'medecin'
       ORDER BY created_at DESC, id DESC
       `,
       [patient_id]
@@ -1029,41 +1030,30 @@ app.delete("/allergies/:id", authRequired, staff, async (req, res) => {
   }
 });
 
-app.delete("/documents/:id", authRequired, staff, async (req, res) => {
+app.delete("/patient/documents/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const check = await pool.query(
-  `
-  SELECT d.*
-  FROM documents d
-  JOIN patients p ON p.id = d.patient_id
-  JOIN cabinet_patients cp ON cp.patient_id = p.id
-  WHERE d.id = $1
-    AND cp.cabinet_id = $2
-  LIMIT 1
-  `,
-  [id, req.user.cabinet_id]
-);
-
-    if (check.rows.length === 0) {
-      return res.status(404).json({ error: "Document introuvable" });
-    }
-
-    const doc = check.rows[0];
-
-    if ((doc.source_document || "patient") !== "patient") {
-      return res.status(403).json({ error: "Suppression refusée pour ce document" });
-    }
-
     const r = await pool.query(
-      "DELETE FROM documents WHERE id = $1 RETURNING *",
+      `
+      DELETE FROM documents
+      WHERE id = $1
+      RETURNING *
+      `,
       [id]
     );
 
-    res.json({ success: true, deleted: r.rows[0] });
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: "Document introuvable" });
+    }
+
+    res.json({
+      success: true,
+      deleted: r.rows[0]
+    });
+
   } catch (err) {
-    console.log("DELETE DOCUMENT ERROR:", err.message);
+    console.log("DELETE PATIENT DOCUMENT ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
