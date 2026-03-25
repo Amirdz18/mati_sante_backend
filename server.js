@@ -34,8 +34,6 @@ const patientUploadStorage = multer.diskStorage({
 
 const patientUpload = multer({ storage: patientUploadStorage });
 
-const path = require("path");
-
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 
