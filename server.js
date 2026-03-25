@@ -4116,17 +4116,30 @@ app.delete("/patient/message/:id", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-app.get("/dashboard/messages-count", async (req, res) => {
-  const result = await db.query(
-    `
-    SELECT COUNT(*) 
-    FROM messages 
-    WHERE sender = 'patient'
-    `
-  );
+app.get("/dashboard/messages-count", authRequired, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT COUNT(*) 
+      FROM messages 
+      WHERE sender = 'patient'
+      AND cabinet_id = $1
+      AND contenu IS NOT NULL
+      AND TRIM(contenu) <> ''
+      `,
+      [req.user.cabinet_id]
+    );
 
-  res.json({ count: Number(result.rows[0].count) });
+    res.json({
+      count: Number(result.rows[0].count),
+    });
+  } catch (err) {
+    console.log("MESSAGES COUNT ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
+
+
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
 });
