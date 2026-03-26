@@ -1683,29 +1683,38 @@ app.delete("/imagerie/:id", authRequired, staff, async (req, res) => {
 
   try {
     const check = await pool.query(
-  `
-  SELECT i.id
-  FROM imagerie i
-  JOIN patients p ON p.id = i.patient_id
-  JOIN cabinet_patients cp ON cp.patient_id = p.id
-  WHERE i.id = $1 AND cp.cabinet_id = $2
-  LIMIT 1
-  `,
-  [id, req.user.cabinet_id]
-);
-
+      `
+      SELECT i.id, i.fichier
+      FROM imagerie i
+      JOIN patients p ON p.id = i.patient_id
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE i.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id]
+    );
 
     if (check.rows.length === 0) {
       return res.status(404).json({ error: "Imagerie introuvable" });
     }
 
-    await pool.query("DELETE FROM imagerie WHERE id=$1", [id]);
+    const row = check.rows[0];
+
+    if (row.fichier && row.fichier.startsWith("/uploads/")) {
+      const absolutePath = path.join(__dirname, row.fichier);
+      if (fs.existsSync(absolutePath)) {
+        fs.unlinkSync(absolutePath);
+      }
+    }
+
+    await pool.query("DELETE FROM imagerie WHERE id = $1", [id]);
+
     res.json({ message: "Imagerie supprimée ✅" });
   } catch (err) {
+    console.log("DELETE /imagerie/:id ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
-
 
 /* =========================================================
    ==================== ORDONNANCES =========================
@@ -3657,10 +3666,10 @@ app.delete("/patient/documents/:id", async (req, res) => {
 
     const r = await pool.query(
       `
-      DELETE FROM documents
+      SELECT *
+      FROM documents
       WHERE id = $1
-        AND COALESCE(source_document, 'patient') = 'medecin'
-      RETURNING *
+      LIMIT 1
       `,
       [id]
     );
@@ -3669,15 +3678,35 @@ app.delete("/patient/documents/:id", async (req, res) => {
       return res.status(404).json({ error: "Document introuvable" });
     }
 
+    const doc = r.rows[0];
+    const filePath = doc.contenu || doc.fichier || doc.url || null;
+
+    if (filePath && String(filePath).startsWith("/uploads/")) {
+      const absolutePath = path.join(__dirname, filePath);
+      if (fs.existsSync(absolutePath)) {
+        fs.unlinkSync(absolutePath);
+      }
+    }
+
+    await pool.query(
+      `
+      DELETE FROM documents
+      WHERE id = $1
+      `,
+      [id]
+    );
+
     res.json({
       success: true,
-      deleted: r.rows[0]
+      deleted: doc
     });
   } catch (err) {
     console.log("DELETE PATIENT DOCUMENT ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
+
 app.get("/patient/:id/home-stats", async (req, res) => {
   try {
     const patient_id = Number(req.params.id);
