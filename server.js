@@ -602,8 +602,8 @@ app.get("/patients", authRequired, staff, async (req, res) => {
       FROM patients p
       JOIN cabinet_patients cp ON cp.patient_id = p.id
       WHERE cp.cabinet_id = $1
-        AND p.is_mobile_account = false
-        AND p.actif = true
+        AND COALESCE(p.is_mobile_account, false) = false
+        AND COALESCE(p.actif, true) = true
       ORDER BY p.id DESC
       `,
       [req.user.cabinet_id]
