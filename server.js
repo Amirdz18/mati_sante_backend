@@ -3389,6 +3389,29 @@ app.get("/medicaments", async (req, res) => {
   try {
     const search = req.query.search || "";
 
+    // 👉 SI VIDE → favoris
+    if (!search) {
+      const r = await pool.query(`
+        SELECT id, nom
+        FROM medicaments
+        WHERE LOWER(nom) IN (
+          'paracétamol',
+          'amoxicilline',
+          'zanidip',
+          'metformine',
+          'ventoline',
+          'doliprane',
+          'augmentin',
+          'cardensiel'
+        )
+        ORDER BY nom ASC
+        LIMIT 20
+      `);
+
+      return res.json(r.rows);
+    }
+
+    // 👉 SINON → recherche intelligente
     const r = await pool.query(
       `
       SELECT id, nom
@@ -3405,9 +3428,9 @@ app.get("/medicaments", async (req, res) => {
       LIMIT 20
       `,
       [
-        `%${search}%`,   // contient
-        `${search}%`,    // commence par
-        `%${search}%`    // fallback
+        `%${search}%`,
+        `${search}%`,
+        `%${search}%`
       ]
     );
 
