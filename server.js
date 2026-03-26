@@ -1034,13 +1034,14 @@ app.delete("/patient/documents/:id", async (req, res) => {
     const { id } = req.params;
 
     const r = await pool.query(
-      `
-      DELETE FROM documents
-      WHERE id = $1
-      RETURNING *
-      `,
-      [id]
-    );
+  `
+  DELETE FROM documents
+  WHERE id = $1
+  RETURNING *
+  `,
+  [id]
+);
+
 
     if (r.rows.length === 0) {
       return res.status(404).json({ error: "Document introuvable" });
