@@ -17,6 +17,8 @@ const pool = require("./db");
 const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
 
 if (!fs.existsSync("uploads")) {
   fs.mkdirSync("uploads");
