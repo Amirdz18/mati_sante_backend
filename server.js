@@ -3387,27 +3387,33 @@ app.get("/dashboard/documents-count", async (req, res) => {
 });
 app.get("/medicaments", async (req, res) => {
   try {
-
-    const search = req.query.search || ""
+    const search = req.query.search || "";
 
     const r = await pool.query(
       `
       SELECT id, nom
       FROM medicaments
       WHERE nom ILIKE $1
-      ORDER BY nom ASC
+      ORDER BY 
+        CASE 
+          WHEN nom ILIKE $2 THEN 0
+          ELSE 1
+        END,
+        nom ASC
       LIMIT 20
       `,
-      [`%${search}%`]
-    )
+      [
+        `%${search}%`,   // contient
+        `${search}%`     // commence par
+      ]
+    );
 
-    res.json(r.rows)
-
+    res.json(r.rows);
   } catch (err) {
-    console.log("MED ERROR", err.message)
-    res.status(500).json({ error: err.message })
+    console.log("MED ERROR", err.message);
+    res.status(500).json({ error: err.message });
   }
-})
+});
 app.get("/posologie", async (req,res)=>{
   try{
 
