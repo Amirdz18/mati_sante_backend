@@ -3396,15 +3396,18 @@ app.get("/medicaments", async (req, res) => {
       WHERE nom ILIKE $1
       ORDER BY 
         CASE 
-          WHEN nom ILIKE $2 THEN 0
-          ELSE 1
+          WHEN LOWER(nom) LIKE LOWER($2) THEN 0
+          WHEN LOWER(nom) LIKE LOWER($3) THEN 1
+          ELSE 2
         END,
+        LENGTH(nom),
         nom ASC
       LIMIT 20
       `,
       [
         `%${search}%`,   // contient
-        `${search}%`     // commence par
+        `${search}%`,    // commence par
+        `%${search}%`    // fallback
       ]
     );
 
@@ -3414,6 +3417,7 @@ app.get("/medicaments", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 app.get("/posologie", async (req,res)=>{
   try{
 
