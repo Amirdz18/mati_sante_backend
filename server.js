@@ -1535,22 +1535,26 @@ app.delete("/analyses/:id", authRequired, staff, async (req, res) => {
 
     console.log("DELETE DEBUG ANALYSE:", debugAnalyse.rows);
 
-    const check = await pool.query(
-      `
-      SELECT a.id
-      FROM analyses a
-      JOIN patients p ON p.id = a.patient_id
-      JOIN cabinet_patients cp ON cp.patient_id = p.id
-      WHERE a.id = $1 AND cp.cabinet_id = $2
-      LIMIT 1
-      `,
-      [id, req.user.cabinet_id]
-    );
+   const check = await pool.query(
+  `
+  SELECT a.id, a.patient_id, cp.cabinet_id
+  FROM analyses a
+  LEFT JOIN cabinet_patients cp ON cp.patient_id = a.patient_id
+  WHERE a.id = $1
+  LIMIT 1
+  `,
+  [id]
+);
 
-    if (check.rows.length === 0) {
-      return res.status(404).json({ error: "Analyse introuvable" });
-    }
+if (check.rows.length === 0) {
+  return res.status(404).json({ error: "Analyse introuvable" });
+}
 
+const analyse = check.rows[0];
+
+if (analyse.patient_id && analyse.cabinet_id !== req.user.cabinet_id) {
+  return res.status(403).json({ error: "Accès interdit" });
+}
     const r = await pool.query(
       "DELETE FROM analyses WHERE id = $1 RETURNING *",
       [id]
