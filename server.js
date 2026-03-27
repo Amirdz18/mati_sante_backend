@@ -1517,8 +1517,9 @@ app.get("/patients/:id/analyses", authRequired, staff, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-
+console.log("DELETE /analyses hit, id =", req.params.id, "user =", req.user?.id, "cabinet =", req.user?.cabinet_id);
 app.delete("/analyses/:id", authRequired, staff, async (req, res) => {
+
   try {
     const id = Number(req.params.id);
 
