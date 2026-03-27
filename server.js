@@ -10,6 +10,12 @@
 // ✅ RDV + Anti-double + Stats + SMS (simulé par défaut)
 
 require("dotenv").config();
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+console.log("Cloudinary config ok:", !!process.env.CLOUDINARY_CLOUD_NAME, !!process.env.CLOUDINARY_API_KEY, !!process.env.CLOUDINARY_API_SECRET);
 
 const express = require("express");
 const cors = require("cors");
@@ -19,7 +25,8 @@ const fs = require("fs");
 const path = require("path");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
-
+const cloudinary = require("cloudinary").v2;
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
 if (!fs.existsSync("uploads")) {
   fs.mkdirSync("uploads");
 }
