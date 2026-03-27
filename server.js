@@ -4259,7 +4259,15 @@ app.post("/messages/mark-read", authRequired, staff, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-
+app.delete("/debug/delete-analyses", async (req, res) => {
+  try {
+    await pool.query("TRUNCATE TABLE analyses RESTART IDENTITY");
+    res.json({ message: "analyses supprimées ✅" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "erreur suppression" });
+  }
+});
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
 });
