@@ -59,17 +59,16 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const patientUploadStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/");
-  },
-  filename: (req, file, cb) => {
-    const uniqueName = Date.now() + "-" + file.originalname;
-    cb(null, uniqueName);
+const patientUploadStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: "mati_sante",
+    resource_type: "auto",
   },
 });
 
-const patientUpload = multer({ storage: storageCloudinary });
+const patientUpload = multer({ storage: patientUploadStorage });
+
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
