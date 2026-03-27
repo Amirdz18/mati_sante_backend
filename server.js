@@ -3703,6 +3703,7 @@ app.post("/upload-patient", patientUpload.single("file"), async (req, res) => {
     }
 
     const patientId = patientResult.rows[0].id;
+    console.log("UPLOAD PATIENT -> patientId =", patientId);
 
     await pool.query(
   `INSERT INTO documents (patient_id, titre, contenu, nom, created_at)
