@@ -1523,17 +1523,20 @@ console.log("DELETE /analyses hit, id =", req.params.id, "user =", req.user?.id,
   try {
     const id = Number(req.params.id);
 
-    const check = await pool.query(
-      `
-      SELECT a.id
-      FROM analyses a
-      JOIN patients p ON p.id = a.patient_id
-      JOIN cabinet_patients cp ON cp.patient_id = p.id
-      WHERE a.id = $1 AND cp.cabinet_id = $2
-      LIMIT 1
-      `,
-      [id, req.user.cabinet_id]
-    );
+   const check = await pool.query(
+  `
+  SELECT a.id
+  FROM analyses a
+  JOIN patients p ON p.id = a.patient_id
+  JOIN cabinet_patients cp ON cp.patient_id = p.id
+  WHERE a.id = $1 AND cp.cabinet_id = $2
+  LIMIT 1
+  `,
+  [id, req.user.cabinet_id]
+);
+
+console.log("DELETE ANALYSE check.rows =", check.rows);
+
 
     if (check.rows.length === 0) {
       return res.status(404).json({ error: "Analyse introuvable" });
