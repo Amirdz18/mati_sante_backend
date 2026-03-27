@@ -61,10 +61,10 @@ app.use(express.json());
 
 const patientUploadStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: {
+  params: async (req, file) => ({
     folder: "mati_sante",
     resource_type: "auto",
-  },
+  }),
 });
 
 const patientUpload = multer({ storage: patientUploadStorage });
