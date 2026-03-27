@@ -63,10 +63,9 @@ const patientUploadStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => ({
     folder: "mati_sante",
-    resource_type: "auto",
+    resource_type: "raw",
   }),
 });
-
 const patientUpload = multer({ storage: patientUploadStorage });
 
 
