@@ -35,6 +35,15 @@ console.log(
   !!process.env.CLOUDINARY_API_SECRET
 );
 
+cloudinary.api.ping((error, result) => {
+  if (error) {
+    console.error("❌ Cloudinary ERROR:", error);
+  } else {
+    console.log("✅ Cloudinary connecté !");
+  }
+});
+
+
 if (!fs.existsSync("uploads")) {
   fs.mkdirSync("uploads");
 }
