@@ -232,10 +232,12 @@ function fileFilter(req, file, cb) {
 }
 
 const upload = multer({
-  storage,
+  storage: patientUploadStorage,
   fileFilter,
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
+  limits: { filesize: 25 * 1024 * 1024 },
 });
+
+
 
 app.use("/uploads", express.static(UPLOAD_DIR));
 
