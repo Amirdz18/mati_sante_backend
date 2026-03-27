@@ -1523,6 +1523,18 @@ app.delete("/analyses/:id", authRequired, staff, async (req, res) => {
     const id = Number(req.params.id);
     console.log("DELETE CHECK:", id, req.user.cabinet_id);
 
+    const debugAnalyse = await pool.query(
+      `
+      SELECT a.id, a.patient_id, cp.cabinet_id
+      FROM analyses a
+      LEFT JOIN cabinet_patients cp ON cp.patient_id = a.patient_id
+      WHERE a.id = $1
+      `,
+      [id]
+    );
+
+    console.log("DELETE DEBUG ANALYSE:", debugAnalyse.rows);
+
     const check = await pool.query(
       `
       SELECT a.id
