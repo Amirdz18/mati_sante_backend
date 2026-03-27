@@ -3703,15 +3703,16 @@ app.post("/upload-patient", patientUpload.single("file"), async (req, res) => {
     const patientId = patientResult.rows[0].id;
 
     await pool.query(
-      `INSERT INTO documents (patient_id, titre, contenu, nom, created_at)
-       VALUES ($1, $2, $3, $4, NOW())`,
-      [
-        patientId,
-        file.originalname,
-        `/uploads/${file.filename}`,
-        file.filename,
-      ]
-    );
+  `INSERT INTO documents (patient_id, titre, contenu, nom, created_at)
+   VALUES ($1, $2, $3, $4, NOW())`,
+  [
+    patientId,
+    file.originalname,
+    file.path,
+    file.originalname,
+  ]
+);
+
 
     return res.json({
       success: true,
