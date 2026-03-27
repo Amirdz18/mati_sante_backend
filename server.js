@@ -3681,6 +3681,7 @@ app.post("/messages", authRequired, staff, async (req, res) => {
 app.post("/upload-patient", patientUpload.single("file"), async (req, res) => {
   try {
     const file = req.file;
+    console.log("UPLOAD PATIENT FILE =", file);
     const { telephone } = req.body;
 
     if (!file) {
