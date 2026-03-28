@@ -3722,7 +3722,7 @@ app.post("/upload-patient", patientUpload.single("file"), async (req, res) => {
   [
     patientId,
     file.originalname,
-    file.path,
+    "/uploads/" + file.filename,
     file.originalname,
   ]
 );
