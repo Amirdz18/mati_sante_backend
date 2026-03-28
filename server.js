@@ -2021,9 +2021,9 @@ app.post("/patients/:id/documents", authRequired, medecinOrAdmin, async (req, re
     }
 
     const result = await pool.query(
-      `INSERT INTO documents (patient_id, titre, nom, contenu)
-       VALUES ($1,$2,$3,$4)
-       RETURNING *`,
+      `INSERT INTO documents (patient_id, titre, nom, contenu, source_document)
+ VALUES ($1,$2,$3,$4,'medecin')
+ RETURNING *`,
       [
         id,
         titre || null,
@@ -2158,12 +2158,11 @@ app.post("/documents", upload.single("file"), async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO documents (patient_id, titre, contenu)
-       VALUES ($1,$2,$3)
-       RETURNING *`,
-      [patient_id, titre, contenu]
-    );
-
+  `INSERT INTO documents (patient_id, titre, contenu, source_document)
+   VALUES ($1,$2,$3,'medecin')
+   RETURNING *`,
+  [patient_id, titre, contenu]
+);
     res.json(result.rows[0]);
 
   } catch (err) {
@@ -3718,8 +3717,8 @@ app.post("/upload-patient", patientUpload.single("file"), async (req, res) => {
     console.log("UPLOAD PATIENT -> patientId =", patientId);
 
     await pool.query(
-  `INSERT INTO documents (patient_id, titre, contenu, nom, created_at)
-   VALUES ($1, $2, $3, $4, NOW())`,
+  `INSERT INTO documents (patient_id, titre, contenu, nom, created_at, source_document)
+   VALUES ($1, $2, $3, $4, NOW(), 'medecin')`,
   [
     patientId,
     file.originalname,
