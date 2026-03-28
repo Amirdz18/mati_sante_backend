@@ -545,15 +545,13 @@ app.get("/patient/:id/documents", async (req, res) => {
       return res.status(404).json({ error: "Patient introuvable" });
     }
 
-    const r = await pool.query(
-      `
-      SELECT *
-      FROM documents
-      WHERE patient_id = $1
-      ORDER BY created_at DESC, id DESC
-      `,
-      [patient_id]
-    );
+    const r = await pool.query(`
+  SELECT *
+  FROM documents
+  WHERE patient_id = $1
+  AND (source_document IS NULL OR source_document = 'medecin')
+  ORDER BY created_at DESC, id DESC
+`, [patient_id]);
 
     res.json({
       success: true,
