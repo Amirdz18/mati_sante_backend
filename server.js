@@ -1884,17 +1884,14 @@ app.post("/documents/send-existing-file", authRequired, medecinOrAdmin, async (r
 
     let savedPath = String(fichier).trim();
 
-    if (savedPath.startsWith("http://") || savedPath.startsWith("https://")) {
-      try {
-        const u = new URL(savedPath);
-        savedPath = u.pathname;
-      } catch (_) {}
-    }
+const isHttpFile =
+  savedPath.startsWith("http://") || savedPath.startsWith("https://");
 
-    if (!savedPath.startsWith("/uploads/")) {
-      return res.status(400).json({ error: "Fichier invalide" });
-    }
+const isUploadFile = savedPath.startsWith("/uploads/");
 
+if (!isHttpFile && !isUploadFile) {
+  return res.status(400).json({ error: "Fichier invalide" });
+}
     const p = await pool.query(
   `
   SELECT p.id
