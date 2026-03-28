@@ -1831,7 +1831,7 @@ app.post("/ordonnances", authRequired, medecinOrAdmin, upload.single("file"), as
       return res.status(404).json({ error: "Patient introuvable" });
     }
 
-    const fichierPath = req.file ? `/uploads/${req.file.filename}` : null;
+    const fichierPath = req.file ? req.file.path : null;
 
     const insertCols = [];
     const insertVals = [];
