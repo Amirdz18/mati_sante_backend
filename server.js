@@ -1690,7 +1690,7 @@ app.post("/imagerie", authRequired, medecinOrAdmin, upload.single("file"), async
     const patient_id = req.body?.patient_id ? Number(req.body.patient_id) : null;
     const type_imagerie = req.body?.type_imagerie || null;
     const remarque = req.body?.remarque || null;
-    const fichier = req.file ? `/uploads/${req.file.filename}` : null;
+   const fichier = req.file ? req.file.path : null;
 
     if (!patient_id) {
       return res.status(400).json({ error: "patient_id obligatoire" });
