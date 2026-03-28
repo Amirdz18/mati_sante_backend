@@ -1964,38 +1964,40 @@ app.delete("/ordonnances/:id", authRequired, staff, async (req, res) => {
 
 app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
   const { id } = req.params;
+
   try {
     const patient = await pool.query(
-  `
-  SELECT p.id
-  FROM patients p
-  JOIN cabinet_patients cp ON cp.patient_id = p.id
-  WHERE p.id = $1 AND cp.cabinet_id = $2
-  LIMIT 1
-  `,
-  [id, req.user.cabinet_id]
-);
+      `
+      SELECT p.id
+      FROM patients p
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE p.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id]
+    );
+
     if (patient.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
     }
+
     const result = await pool.query(
       `
       SELECT *
       FROM documents
       WHERE patient_id = $1
-        AND COALESCE(source_document, 'patient') = 'patient'
+        AND COALESCE(source_document, 'medecin') = 'medecin'
       ORDER BY id DESC
       `,
       [id]
     );
+
     res.json(result.rows);
   } catch (err) {
     console.log("GET DOCUMENTS ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
-
-
 // ⬇️ AJOUTE LA NOUVELLE ROUTE ICI ⬇️
 
 app.post("/patients/:id/documents", authRequired, medecinOrAdmin, async (req, res) => {
