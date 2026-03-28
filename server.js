@@ -2139,9 +2139,13 @@ app.get("/patient/:id/messages", async (req, res) => {
 
 app.post("/documents", upload.single("file"), async (req, res) => {
   try {
-
     const patient_id = req.body?.patient_id ? Number(req.body.patient_id) : null;
     const titre = req.body?.titre || "Document";
+    const categorie = req.body?.categorie || null;
+    const date_document = req.body?.date_document || null;
+    const consultation_id = req.body?.consultation_id
+      ? Number(req.body.consultation_id)
+      : null;
 
     const contenu =
       req.body?.note ||
@@ -2151,69 +2155,49 @@ app.post("/documents", upload.single("file"), async (req, res) => {
       req.body?.remarque ||
       "";
 
+    const fichier = req.file
+      ? (req.file.path || `/uploads/${req.file.filename}`)
+      : null;
+
+    const nom = req.file?.originalname || titre;
+
     if (!patient_id) {
       return res.status(400).json({ error: "patient_id obligatoire" });
     }
 
     const result = await pool.query(
-  `INSERT INTO documents (patient_id, titre, contenu, source_document)
-   VALUES ($1,$2,$3,'medecin')
-   RETURNING *`,
-  [patient_id, titre, contenu]
-);
-    res.json(result.rows[0]);
+      `INSERT INTO documents (
+        patient_id,
+        titre,
+        contenu,
+        nom,
+        fichier,
+        categorie,
+        date_document,
+        consultation_id,
+        source_document
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'medecin')
+      RETURNING *`,
+      [
+        patient_id,
+        titre,
+        contenu,
+        nom,
+        fichier,
+        categorie,
+        date_document,
+        consultation_id,
+      ]
+    );
 
+    res.json(result.rows[0]);
   } catch (err) {
     console.log("DOCUMENT ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
-})
-/* =========================================================
-   ==================== PARAMETRES ==========================
-========================================================= */
-async function ensureParametresRow() {
-  const existing = await pool.query("SELECT id FROM parametres ORDER BY id ASC LIMIT 1");
-  if (existing.rows.length > 0) return existing.rows[0].id;
-
-  const ins = await pool.query(
-    `INSERT INTO parametres (cabinet_nom, medecin_nom)
-     VALUES ($1,$2)
-     RETURNING id`,
-    ["Cabinet Médical", "Dr. Nom Prénom"]
-  );
-  return ins.rows[0].id;
-}
-
-app.get("/parametres", async (req, res) => {
-  try {
-    const r = await pool.query("SELECT * FROM parametres ORDER BY id ASC LIMIT 1");
-    if (r.rows.length === 0) return res.json({});
-    res.json(r.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
 });
-app.get("/cabinets", async (req, res) => {
-  try {
-    const { ville } = req.query;
 
-    let query = "SELECT id, nom, ville, telephone, adresse, specialite, photo FROM cabinets";
-
-    let params = [];
-
-    if (ville) {
-      query += " WHERE ville=$1";
-      params.push(ville);
-    }
-
-    query += " ORDER BY nom";
-
-    const r = await pool.query(query, params);
-    res.json(r.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 app.put("/parametres", async (req, res) => {
   try {
