@@ -4069,11 +4069,22 @@ app.get("/plateforme/cabinets", authRequired, async (req, res) => {
 });
 app.get("/cabinets", async (req, res) => {
   try {
-    const result = await pool.query(`
+    const ville = (req.query.ville || req.query.wilaya || "").trim();
+
+    let query = `
       SELECT id, nom, adresse, telephone, ville
       FROM cabinets
-      ORDER BY nom ASC
-    `);
+    `;
+    const params = [];
+
+    if (ville) {
+      query += ` WHERE LOWER(TRIM(ville)) = LOWER(TRIM($1))`;
+      params.push(ville);
+    }
+
+    query += ` ORDER BY nom ASC`;
+
+    const result = await pool.query(query, params);
 
     return res.json(result.rows);
   } catch (err) {
@@ -4081,6 +4092,8 @@ app.get("/cabinets", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+
+
 
 app.get("/plateforme/cabinets/:id/medecins", authRequired, async (req, res) => {
   try {
