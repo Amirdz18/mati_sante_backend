@@ -4067,6 +4067,20 @@ app.get("/plateforme/cabinets", authRequired, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+app.get("/cabinets", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, nom, adresse, telephone, ville
+      FROM cabinets
+      ORDER BY nom ASC
+    `);
+
+    return res.json(result.rows);
+  } catch (err) {
+    console.log("GET /cabinets ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 app.get("/plateforme/cabinets/:id/medecins", authRequired, async (req, res) => {
   try {
