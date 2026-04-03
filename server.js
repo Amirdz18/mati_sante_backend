@@ -76,102 +76,307 @@ async function generateOrdonnancePdfAndUpload({
   const now = new Date();
   const dateStr = now.toLocaleDateString("fr-FR");
 
-  const html = `
+const barcodeRaw = `RX-${patient_id}-${Date.now()}`;
+
+const html = `
 <!doctype html>
 <html>
-<head>
-<meta charset="utf-8" />
-<title>ORDONNANCE</title>
+  <head>
+    <meta charset="utf-8" />
+    <title>ORDONNANCE</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #ffffff;
+      }
+      body {
+        font-family: Arial, sans-serif;
+        color: #111827;
+        padding: 28px;
+      }
+      .topAccent {
+        width: 100%;
+        height: 6px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #0f766e 0%, #14b8a6 45%, #99f6e4 100%);
+        margin-bottom: 18px;
+      }
+      .headerRow {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        align-items: flex-start;
+        margin-bottom: 14px;
+      }
+      .cabLeft {
+        width: 42%;
+        font-size: 13px;
+        line-height: 1.45;
+        text-align: left;
+      }
+      .cabName {
+        font-size: 20px;
+        font-weight: 800;
+        color: #0f172a;
+        margin-bottom: 5px;
+      }
+      .cabDoctor {
+        margin-top: 4px;
+        font-size: 15px;
+        font-weight: 700;
+        color: #111827;
+      }
+      .cabLine {
+        color: #334155;
+      }
+      .docRight {
+        flex: 1;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .docTitle {
+        font-size: 44px;
+        font-weight: 900;
+        letter-spacing: 3px;
+        color: #0f172a;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        line-height: 1;
+        border-bottom: 3px solid #0f766e;
+        padding-bottom: 6px;
+        display: inline-block;
+      }
+      .barcodeTopWrap {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: #ffffff;
+        padding: 8px 10px;
+        border-radius: 12px;
+        margin: 8px 0 10px;
+        min-height: 110px;
+      }
+      .barcodeTopWrap svg {
+        max-width: 100%;
+        height: auto;
+      }
+      .docDate {
+        font-size: 12px;
+        color: #475569;
+        margin-top: 2px;
+      }
+      .headerSeparator {
+        width: 100%;
+        border-top: 2px solid #1f2937;
+        margin: 10px 0 16px;
+      }
+      .patientBox {
+        border: 1px solid #dbe2ea;
+        background: #f8fafc;
+        padding: 12px 14px;
+        border-radius: 12px;
+        margin: 14px 0 18px;
+      }
+      .patientRow {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .patientItem {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+      }
+      .value {
+        font-size: 15px;
+        font-weight: 700;
+        color: #0f172a;
+      }
+      .rxBody {
+        min-height: 380px;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        background: #ffffff;
+        padding: 20px 20px 26px;
+      }
+      .rxHead {
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .8px;
+        color: #0f766e;
+        margin-bottom: 14px;
+      }
+      .content {
+        white-space: normal;
+        line-height: 2;
+        font-size: 16px;
+        color: #111827;
+      }
+      .footerRow {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 20px;
+        margin-top: 28px;
+      }
+      .footerLeft {
+        flex: 1;
+        align-self: flex-end;
+        padding-bottom: 4px;
+      }
+      .miniLabel {
+        font-size: 11px;
+        color: #64748b;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+        letter-spacing: .4px;
+      }
+      .refText {
+        font-size: 13px;
+        font-weight: 700;
+        color: #0f172a;
+      }
+      .signBox {
+        width: 280px;
+        text-align: center;
+        background: #ffffff;
+        padding: 10px 8px 0;
+        border-top: 1px dashed #cbd5e1;
+      }
+      .signTitle {
+        font-size: 13px;
+        font-weight: 800;
+        color: #334155;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .signVisuals {
+        min-height: 120px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 12px;
+        margin-bottom: 8px;
+        position: relative;
+      }
+      .signaturePlaceholder {
+        width: 150px;
+        height: 70px;
+      }
+      .signDoctorName {
+        font-size: 12px;
+        color: #475569;
+        margin-bottom: 10px;
+        min-height: 16px;
+      }
+      .signLine {
+        width: 100%;
+        border-top: 2px solid #0f172a;
+        margin-top: 4px;
+      }
+      @page {
+        size: A4;
+        margin: 14mm;
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  </head>
+  <body>
+    <div class="topAccent"></div>
 
-<style>
-body {
-  font-family: Arial, sans-serif;
-  padding: 40px;
-  color: #111;
-}
+    <div class="headerRow">
+      <div class="cabLeft">
+        <div class="cabName">Cabinet Mati Santé</div>
+        <div class="cabLine">Ordonnance médicale</div>
+        <div class="cabDoctor">Docteur</div>
+      </div>
 
-.header {
-  text-align: center;
-  margin-bottom: 30px;
-}
+      <div class="docRight">
+        <div class="docTitle">ORDONNANCE</div>
+        <div class="barcodeTopWrap">
+          <svg id="rxBarcode"></svg>
+        </div>
+        <div class="docDate">${escapeHtml(dateStr)}</div>
+      </div>
+    </div>
 
-.title {
-  font-size: 32px;
-  font-weight: bold;
-  border-bottom: 2px solid #0f766e;
-  display: inline-block;
-  padding-bottom: 5px;
-}
+    <div class="headerSeparator"></div>
 
-.sub {
-  margin-top: 5px;
-  color: #555;
-}
+    <div class="patientBox">
+      <div class="patientRow">
+        <div class="patientItem">
+          <span class="label">Patient</span>
+          <span class="value">${escapeHtml(String(patient_id))}</span>
+        </div>
+        <div class="patientItem">
+          <span class="label">Date</span>
+          <span class="value">${escapeHtml(dateStr)}</span>
+        </div>
+      </div>
+    </div>
 
-.meta {
-  margin-top: 20px;
-  font-size: 14px;
-}
+    <div class="rxBody">
+      <div class="rxHead">Prescription</div>
+      <div class="content">
+        ${escapeHtml(safeContenu).replace(/\n/g, "<br>")}
+      </div>
+    </div>
 
-.box {
-  border: 1px solid #ccc;
-  padding: 20px;
-  margin-top: 25px;
-  min-height: 200px;
-  border-radius: 8px;
-}
+    <div class="footerRow">
+      <div class="footerLeft">
+        <div class="miniLabel">Référence</div>
+        <div class="refText">${escapeHtml(barcodeRaw)}</div>
+      </div>
 
-.barcode {
-  text-align: center;
-  margin-top: 30px;
-  font-weight: bold;
-}
+      <div class="signBox">
+        <div class="signTitle">Signature et cachet</div>
+        <div class="signVisuals">
+          <div class="signaturePlaceholder"></div>
+        </div>
+        <div class="signDoctorName">Médecin traitant</div>
+        <div class="signLine"></div>
+      </div>
+    </div>
 
-.signature {
-  margin-top: 60px;
-  text-align: right;
-}
-
-.footer {
-  text-align: center;
-  margin-top: 40px;
-  font-size: 12px;
-  color: gray;
-}
-</style>
-</head>
-
-<body>
-
-<div class="header">
-  <div class="title">TEST 123 ORDONNANCE</div>
-  <div class="sub">Cabinet Mati Santé</div>
-</div>
-
-<div class="meta">
-  <div><strong>Date :</strong> ${dateStr}</div>
-  <div><strong>Patient :</strong> ${patient_id}</div>
-</div>
-
-<div class="box">
-  ${safeContenu.replace(/\n/g, "<br>")}
-</div>
-
-<div class="barcode">
-  Code: ${patient_id}-${Date.now()}
-</div>
-
-<div class="signature">
-  Signature du médecin ✍️
-</div>
-
-<div class="footer">
-  Document généré automatiquement
-</div>
-
-</body>
+    <script>
+      (function () {
+        try {
+          if (window.JsBarcode) {
+            JsBarcode("#rxBarcode", "${barcodeRaw}", {
+              format: "CODE128",
+              width: 3,
+              height: 90,
+              displayValue: true,
+              font: "Arial",
+              fontSize: 18,
+              margin: 8,
+              background: "#ffffff",
+              lineColor: "#09051a"
+            });
+          }
+        } catch (e) {
+          console.error("Erreur barcode:", e);
+        }
+      })();
+    </script>
+  </body>
 </html>
 `;
+
 
   const browser = await puppeteer.launch({
   args: ["--no-sandbox", "--disable-setuid-sandbox"],
