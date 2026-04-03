@@ -21,13 +21,11 @@ const jwt = require("jsonwebtoken");
 const puppeteer = require("puppeteer");
 const bcrypt = require("bcrypt");
 const cloudinary = require("cloudinary").v2;
-const { CloudinaryStorage } = require("multer-storage-cloudinary");
-const storageCloudinary = new CloudinaryStorage({
+const cloudinaryStorage = require("multer-storage-cloudinary");
+const storageCloudinary = cloudinaryStorage({
   cloudinary: cloudinary,
-  params: {
-    folder: "mati-sante",
-    allowed_formats: ["jpg", "png", "jpeg", "pdf"],
-  },
+  folder: "mati-sante",
+  allowedFormats: ["jpg", "png", "jpeg", "pdf"],
 });
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
