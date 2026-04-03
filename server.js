@@ -79,8 +79,7 @@ async function generateOrdonnancePdfAndUpload({
 
 const barcodeRaw = `RX-${patient_id}-${Date.now()}`;
 const cab = await pool.query(
-  "SELECT * FROM parametres WHERE cabinet_id = $1 LIMIT 1",
-  [cabinet_id]
+  "SELECT * FROM parametres LIMIT 1"
 );
 
 const cabinet = cab.rows[0] || {};
