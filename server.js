@@ -10,7 +10,6 @@
 // ✅ RDV + Anti-double + Stats + SMS (simulé par défaut)
 
 require("dotenv").config();
-
 const express = require("express");
 const cors = require("cors");
 const pool = require("./db");
@@ -21,16 +20,22 @@ const jwt = require("jsonwebtoken");
 const puppeteer = require("puppeteer");
 const bcrypt = require("bcrypt");
 const cloudinary = require("cloudinary").v2;
-const { CloudinaryStorage } = require("multer-storage-cloudinary");
-const storageCloudinary = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  folder: "mati-sante",
-  allowedFormats: ["jpg", "png", "jpeg", "pdf"],
-});
+
+// ✅ IMPORTANT : import correct
+const cloudinaryStorage = require("multer-storage-cloudinary");
+
+// ✅ config cloudinary AVANT utilisation
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// ✅ stockage corrigé (PAS de new)
+const storageCloudinary = cloudinaryStorage({
+  cloudinary: cloudinary,
+  folder: "mati-sante",
+  allowedFormats: ["jpg", "png", "jpeg", "pdf"],
 });
 
 console.log(
