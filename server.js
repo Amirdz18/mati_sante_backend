@@ -411,7 +411,8 @@ const html = `
     const uploaded = await cloudinary.uploader.upload(tempPdfPath, {
       folder: "mati-sante",
       resource_type: "auto",
-      public_id: `ordonnance_${patient_id}_${Date.now()}`,
+      public_id: `TESTPDF_${patient_id}_${Date.now()}`,
+
       overwrite: true,
     });
 
