@@ -177,7 +177,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const patientUploadStorage = new CloudinaryStorage({
+const patientUploadStorage = cloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => ({
     folder: "mati_sante",
