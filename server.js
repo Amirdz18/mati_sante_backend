@@ -77,57 +77,90 @@ async function generateOrdonnancePdfAndUpload({
   const dateStr = now.toLocaleDateString("fr-FR");
 
   const html = `
-    <!doctype html>
-    <html lang="fr">
-    <head>
-      <meta charset="UTF-8" />
-      <title>${escapeHtml(safeTitre)}</title>
-      <style>
-        body {
-          font-family: Arial, sans-serif;
-          padding: 40px;
-          color: #111;
-          font-size: 14px;
-          line-height: 1.6;
-        }
-        h1 {
-          text-align: center;
-          margin-bottom: 10px;
-        }
-        .meta {
-          margin-bottom: 30px;
-          color: #444;
-        }
-        .box {
-          border: 1px solid #ddd;
-          border-radius: 8px;
-          padding: 20px;
-          min-height: 300px;
-          white-space: pre-wrap;
-        }
-        .footer {
-          margin-top: 40px;
-          text-align: right;
-          color: #666;
-        }
-      </style>
-    </head>
-    <body>
-      <h1>${escapeHtml(safeTitre)}</h1>
-      <div class="meta">
-        <div><strong>Date :</strong> ${escapeHtml(dateStr)}</div>
-        <div><strong>Patient ID :</strong> ${escapeHtml(patient_id)}</div>
-      </div>
-      <div class="box">${escapeHtml(safeContenu).replace(/\n/g, "<br>")}</div>
-      <div class="footer">Document généré automatiquement</div>
-    </body>
-    </html>
-  `;
+<html>
+<head>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    padding: 40px;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 30px;
+  }
+
+  .title {
+    font-size: 24px;
+    font-weight: bold;
+  }
+
+  .meta {
+    margin-bottom: 20px;
+  }
+
+  .box {
+    border: 1px solid #ccc;
+    padding: 20px;
+    min-height: 150px;
+  }
+
+  .footer {
+    margin-top: 40px;
+    text-align: center;
+    font-size: 12px;
+    color: gray;
+  }
+
+  .signature {
+    margin-top: 50px;
+    text-align: right;
+  }
+
+  .barcode {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 14px;
+  }
+</style>
+</head>
+
+<body>
+
+<div class="header">
+  <div class="title">Ordonnance Médicale</div>
+  <div>Cabinet Mati Santé</div>
+</div>
+
+<div class="meta">
+  <div><strong>Date :</strong> ${escapeHtml(dateStr)}</div>
+  <div><strong>Patient ID :</strong> ${escapeHtml(patient_id)}</div>
+</div>
+
+<div class="box">
+  ${escapeHtml(safeContenu).replace(/\n/g, "<br>")}
+</div>
+
+<div class="barcode">
+  Code: ${patient_id}-${Date.now()}
+</div>
+
+<div class="signature">
+  Signature du médecin ✍️
+</div>
+
+<div class="footer">
+  Document généré automatiquement
+</div>
+
+</body>
+</html>
+`;
+
 
   const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  args: ["--no-sandbox", "--disable-setuid-sandbox"],
+});
 
   try {
     const page = await browser.newPage();
