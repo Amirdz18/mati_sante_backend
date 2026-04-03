@@ -70,6 +70,7 @@ async function generateOrdonnancePdfAndUpload({
   titre,
   contenu,
   patient_id,
+  cabinet_id,
 }) {
   const safeTitre = titre || "Ordonnance";
   const safeContenu = contenu || "";
@@ -77,7 +78,12 @@ async function generateOrdonnancePdfAndUpload({
   const dateStr = now.toLocaleDateString("fr-FR");
 
 const barcodeRaw = `RX-${patient_id}-${Date.now()}`;
+const cab = await pool.query(
+  "SELECT nom, telephone, adresse FROM parametres WHERE cabinet_id = $1 LIMIT 1",
+  [cabinet_id]
+);
 
+const cabinet = cab.rows[0] || {};
 const html = `
 <!doctype html>
 <html>
@@ -300,7 +306,7 @@ const html = `
 
     <div class="headerRow">
       <div class="cabLeft">
-        <div class="cabName">Cabinet Mati Santé</div>
+        <div class="cabName">${cabinet.nom || ""}</div>
         <div class="cabLine">Ordonnance médicale</div>
         <div class="cabDoctor">Docteur</div>
       </div>
@@ -2204,11 +2210,12 @@ app.post("/ordonnances", authRequired, medecinOrAdmin, upload.single("file"), as
     let fichierPath = req.file ? req.file.path : null;
 
 if (!fichierPath && contenu) {
-  fichierPath = await generateOrdonnancePdfAndUpload({
-    titre,
-    contenu,
-    patient_id,
-  });
+    fichierPath = await generateOrdonnancePdfAndUpload({
+  titre,
+  contenu,
+  patient_id,
+  cabinet_id: req.user.cabinet_id, // 👈 AJOUTE ÇA
+});
 }
     const insertCols = [];
     const insertVals = [];
