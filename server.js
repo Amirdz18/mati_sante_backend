@@ -22,7 +22,7 @@ const puppeteer = require("puppeteer");
 const bcrypt = require("bcrypt");
 const cloudinary = require("cloudinary").v2;
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
-const storageCloudinary = cloudinaryStorage({
+const storageCloudinary = CloudinaryStorage({
   cloudinary: cloudinary,
   folder: "mati-sante",
   allowedFormats: ["jpg", "png", "jpeg", "pdf"],
