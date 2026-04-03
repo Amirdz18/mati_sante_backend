@@ -18,6 +18,7 @@ const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 const jwt = require("jsonwebtoken");
+const puppeteer = require("puppeteer");
 const bcrypt = require("bcrypt");
 const cloudinary = require("cloudinary").v2;
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
@@ -52,6 +53,120 @@ cloudinary.api.ping((error, result) => {
 
 if (!fs.existsSync("uploads")) {
   fs.mkdirSync("uploads");
+}
+function escapeHtml(str = "") {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+async function generateOrdonnancePdfAndUpload({
+  titre,
+  contenu,
+  patient_id,
+}) {
+  const safeTitre = titre || "Ordonnance";
+  const safeContenu = contenu || "";
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("fr-FR");
+
+  const html = `
+    <!doctype html>
+    <html lang="fr">
+    <head>
+      <meta charset="UTF-8" />
+      <title>${escapeHtml(safeTitre)}</title>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          padding: 40px;
+          color: #111;
+          font-size: 14px;
+          line-height: 1.6;
+        }
+        h1 {
+          text-align: center;
+          margin-bottom: 10px;
+        }
+        .meta {
+          margin-bottom: 30px;
+          color: #444;
+        }
+        .box {
+          border: 1px solid #ddd;
+          border-radius: 8px;
+          padding: 20px;
+          min-height: 300px;
+          white-space: pre-wrap;
+        }
+        .footer {
+          margin-top: 40px;
+          text-align: right;
+          color: #666;
+        }
+      </style>
+    </head>
+    <body>
+      <h1>${escapeHtml(safeTitre)}</h1>
+      <div class="meta">
+        <div><strong>Date :</strong> ${escapeHtml(dateStr)}</div>
+        <div><strong>Patient ID :</strong> ${escapeHtml(patient_id)}</div>
+      </div>
+      <div class="box">${escapeHtml(safeContenu).replace(/\n/g, "<br>")}</div>
+      <div class="footer">Document généré automatiquement</div>
+    </body>
+    </html>
+  `;
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "networkidle0" });
+
+    const tempDir = path.join(__dirname, "uploads");
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const tempPdfPath = path.join(
+      tempDir,
+      `ordonnance_${patient_id}_${Date.now()}.pdf`
+    );
+
+    await page.pdf({
+      path: tempPdfPath,
+      format: "A4",
+      printBackground: true,
+      margin: {
+        top: "20mm",
+        right: "12mm",
+        bottom: "20mm",
+        left: "12mm",
+      },
+    });
+
+    const uploaded = await cloudinary.uploader.upload(tempPdfPath, {
+      folder: "mati-sante",
+      resource_type: "auto",
+      public_id: `ordonnance_${patient_id}_${Date.now()}`,
+      overwrite: true,
+    });
+
+    if (fs.existsSync(tempPdfPath)) {
+      fs.unlinkSync(tempPdfPath);
+    }
+
+    return uploaded.secure_url;
+  } finally {
+    await browser.close();
+  }
 }
 
 const app = express();
@@ -1829,8 +1944,15 @@ app.post("/ordonnances", authRequired, medecinOrAdmin, upload.single("file"), as
       return res.status(404).json({ error: "Patient introuvable" });
     }
 
-    const fichierPath = req.file ? req.file.path : null;
+    let fichierPath = req.file ? req.file.path : null;
 
+if (!fichierPath && contenu) {
+  fichierPath = await generateOrdonnancePdfAndUpload({
+    titre,
+    contenu,
+    patient_id,
+  });
+}
     const insertCols = [];
     const insertVals = [];
     const params = [];
