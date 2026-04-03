@@ -21,7 +21,7 @@ const jwt = require("jsonwebtoken");
 const puppeteer = require("puppeteer");
 const bcrypt = require("bcrypt");
 const cloudinary = require("cloudinary").v2;
-const cloudinaryStorage = require("multer-storage-cloudinary");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const storageCloudinary = cloudinaryStorage({
   cloudinary: cloudinary,
   folder: "mati-sante",
