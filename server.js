@@ -963,10 +963,9 @@ app.get("/patient/:id/documents", async (req, res) => {
   SELECT *
   FROM documents
   WHERE patient_id = $1
-  AND (source_document IS NULL OR source_document = 'medecin')
+  AND source_document = 'patient'
   ORDER BY created_at DESC, id DESC
 `, [patient_id]);
-
     res.json({
       success: true,
       documents: r.rows
