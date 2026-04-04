@@ -81,6 +81,14 @@ const barcodeRaw = `RX-${patient_id}-${Date.now()}`;
 const cab = await pool.query(
   "SELECT * FROM parametres LIMIT 1"
 );
+const patientRes = await pool.query(
+  "SELECT nom, prenom, date_naissance FROM patients WHERE id = $1 LIMIT 1",
+  [patient_id]
+);
+
+const patientData = patientRes.rows[0] || {};
+const patientNomComplet =
+  `${patientData.nom || ""} ${patientData.prenom || ""}`.trim() || String(patient_id);
 
 const cabinet = cab.rows[0] || {};
 const html = `
@@ -329,7 +337,7 @@ const html = `
     <div class="patientItem">
       <span class="label">Patient</span>
       <span class="value">
-        ${escapeHtml(`${patient_nom || ""} ${patient_prenom || ""}`.trim() || String(patient_id))}
+        ${escapeHtml(patientNomComplet)}
       </span>
     </div>
     <div class="patientItem">
