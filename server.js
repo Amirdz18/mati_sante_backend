@@ -325,17 +325,19 @@ const html = `
     <div class="headerSeparator"></div>
 
     <div class="patientBox">
-      <div class="patientRow">
-        <div class="patientItem">
-          <span class="label">Patient</span>
-          <span class="value">${escapeHtml(String(patient_id))}</span>
-        </div>
-        <div class="patientItem">
-          <span class="label">Date</span>
-          <span class="value">${escapeHtml(dateStr)}</span>
-        </div>
-      </div>
+  <div class="patientRow">
+    <div class="patientItem">
+      <span class="label">Patient</span>
+      <span class="value">
+        ${escapeHtml(`${patient_nom || ""} ${patient_prenom || ""}`.trim() || String(patient_id))}
+      </span>
     </div>
+    <div class="patientItem">
+      <span class="label">Date</span>
+      <span class="value">${escapeHtml(dateStr)}</span>
+    </div>
+  </div>
+</div>
 
     <div class="rxBody">
       <div class="rxHead">Prescription</div>
