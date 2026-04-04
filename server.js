@@ -643,10 +643,12 @@ function fileFilter(req, file, cb) {
 }
 
 const upload = multer({
-  storage: patientUploadStorage,
+  storage: patientStorage,
   fileFilter,
   limits: { filesize: 25 * 1024 * 1024 },
 });
+
+
 
 
 
