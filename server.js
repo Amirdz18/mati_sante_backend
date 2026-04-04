@@ -946,6 +946,27 @@ app.get("/patient/:id/rdv", async (req, res) => {
   }
 });
 
+app.get("/patients/:id/documents", async (req, res) => {
+  try {
+    const patient_id = req.params.id;
+
+    const r = await pool.query(`
+      SELECT *
+      FROM documents
+      WHERE patient_id = $1
+      AND source_document = 'patient'
+      ORDER BY created_at DESC, id DESC
+    `, [patient_id]);
+
+    res.json({
+      success: true,
+      documents: r.rows
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "erreur serveur" });
+  }
+});
 app.get("/patient/:id/documents", async (req, res) => {
   try {
     const patient_id = req.params.id;
@@ -958,28 +979,6 @@ app.get("/patient/:id/documents", async (req, res) => {
     if (p.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
     }
-
-  const r = await pool.query(`
-  SELECT *
-  FROM documents
-  WHERE patient_id = $1
-  AND source_document = 'patient'
-  ORDER BY created_at DESC, id DESC
-`, [patient_id]);
-
-
-    res.json({
-      success: true,
-      documents: r.rows
-    });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "erreur serveur" });
-  }
-});
-app.get("/patients/:id/documents", async (req, res) => {
-  try {
-    const patient_id = req.params.id;
 
     const r = await pool.query(`
       SELECT *
@@ -997,12 +996,12 @@ app.get("/patients/:id/documents", async (req, res) => {
       success: true,
       documents: r.rows
     });
-
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "erreur serveur" });
   }
 });
+
 
 // /auth/me => retourne le user du token
 app.get("/auth/me", authRequired, (req, res) => {
