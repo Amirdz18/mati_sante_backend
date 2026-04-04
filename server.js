@@ -350,9 +350,9 @@ const html = `
       </span>
     </div>
     <div class="patientItem">
-      <span class="label">Date</span>
-<span class="value">${escapeHtml(dateStr)}</span>
-    </div>
+  <span class="label">Âge</span>
+  <span class="value">${escapeHtml(String(age))} ans</span>
+</div>
   </div>
 </div>
 
