@@ -959,11 +959,11 @@ app.get("/patient/:id/documents", async (req, res) => {
       return res.status(404).json({ error: "Patient introuvable" });
     }
 
-   const r = await pool.query(`
+  const r = await pool.query(`
   SELECT *
   FROM documents
   WHERE patient_id = $1
-  AND (source_document IS NULL OR source_document = 'patient' OR source_document = 'medecin')
+  AND source_document = 'patient'
   ORDER BY created_at DESC, id DESC
 `, [patient_id]);
 
@@ -972,6 +972,24 @@ app.get("/patient/:id/documents", async (req, res) => {
       success: true,
       documents: r.rows
     });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "erreur serveur" });
+  }
+});
+app.get("/patients/:id/documents", async (req, res) => {
+  try {
+    const patient_id = req.params.id;
+
+    const r = await pool.query(`
+      SELECT *
+      FROM documents
+      WHERE patient_id = $1
+      AND source_document = 'patient'
+      ORDER BY created_at DESC, id DESC
+    `, [patient_id]);
+
+    res.json(r.rows);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "erreur serveur" });
