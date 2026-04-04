@@ -982,14 +982,22 @@ app.get("/patients/:id/documents", async (req, res) => {
     const patient_id = req.params.id;
 
     const r = await pool.query(`
-  SELECT *
-  FROM documents
-  WHERE patient_id = $1
-  AND (source_document = 'patient' OR source_document = 'medecin' OR source_document IS NULL)
-  ORDER BY created_at DESC, id DESC
-`, [patient_id]);
+      SELECT *
+      FROM documents
+      WHERE patient_id = $1
+      AND (
+        source_document = 'patient'
+        OR source_document = 'medecin'
+        OR source_document IS NULL
+      )
+      ORDER BY created_at DESC, id DESC
+    `, [patient_id]);
 
-    res.json(r.rows);
+    res.json({
+      success: true,
+      documents: r.rows
+    });
+
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "erreur serveur" });
