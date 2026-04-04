@@ -2407,10 +2407,9 @@ app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
     const result = await pool.query(
       `
       SELECT *
-      FROM documents
-      WHERE patient_id = $1
-        AND COALESCE(source_document, 'medecin') = 'medecin'
-      ORDER BY id DESC
+FROM documents
+WHERE patient_id = $1
+ORDER BY id DESC
       `,
       [id]
     );
