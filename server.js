@@ -458,14 +458,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
-
 const uploadDir = path.join(__dirname, "uploads");
 
 if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
+  fs.mkdirSync(uploadDir, { recursive: true });
 }
 
 const patientStorage = multer.diskStorage({
@@ -484,7 +480,6 @@ const patientUpload = multer({
     fileSize: 10 * 1024 * 1024,
   },
 });
-
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
