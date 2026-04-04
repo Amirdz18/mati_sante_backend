@@ -458,14 +458,32 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const patientUploadStorage = cloudinaryStorage({
-  cloudinary: cloudinary,
-  params: async (req, file) => ({
-    folder: "mati_sante",
-    resource_type: "auto",
-  }),
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+
+const uploadDir = path.join(__dirname, "uploads");
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
+
+const patientStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueName = Date.now() + "-" + file.originalname;
+    cb(null, uniqueName);
+  },
 });
-const patientUpload = multer({ storage: patientUploadStorage });
+
+const patientUpload = multer({
+  storage: patientStorage,
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
+});
 
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
