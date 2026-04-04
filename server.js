@@ -305,10 +305,13 @@ const html = `
 
     <div class="headerRow">
       <div class="cabLeft">
-        <div class="cabName">${cabinet.nom || ""}</div>
-        <div class="cabLine">Ordonnance médicale</div>
-        <div class="cabDoctor">Docteur</div>
-      </div>
+  <div class="cabName">${cabinet.nom || ""}</div>
+  <div class="cabDoctor">${cabinet.medecin_nom || ""}</div>
+  <div class="cabLine">${cabinet.specialite || ""}</div>
+  <div class="cabLine">${cabinet.adresse || ""}</div>
+  <div class="cabLine">Tél: ${cabinet.telephone || ""}</div>
+  <div class="cabLine">${cabinet.email || ""}</div>
+</div>
 
       <div class="docRight">
         <div class="docTitle">ORDONNANCE</div>
