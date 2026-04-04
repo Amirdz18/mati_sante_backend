@@ -2646,7 +2646,19 @@ app.put("/parametres", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.get("/parametres", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM parametres LIMIT 1");
 
+    if (result.rows.length === 0) {
+      return res.json({});
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 app.post("/parametres/logo", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "Aucun fichier envoyé" });
