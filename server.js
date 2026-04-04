@@ -88,8 +88,14 @@ const patientRes = await pool.query(
 
 const patientData = patientRes.rows[0] || {};
 console.log("PDF PATIENT =", patientData);
+
 const patientNomComplet =
   `${patientData.nom || ""} ${patientData.prenom || ""}`.trim() || String(patient_id);
+
+const age =
+  patientData.date_naissance
+    ? new Date().getFullYear() - new Date(patientData.date_naissance).getFullYear()
+    : "";
   console.log("PDF PATIENT =", { patient_id, patientData, patientNomComplet });
 
 
@@ -345,7 +351,7 @@ const html = `
     </div>
     <div class="patientItem">
       <span class="label">Date</span>
-      <span class="value">${escapeHtml(dateStr)}</span>
+<span class="value">${escapeHtml(dateStr)}</span>
     </div>
   </div>
 </div>
