@@ -4116,7 +4116,7 @@ app.post("/upload-patient", patientUpload.single("file"), async (req, res) => {
 
     await pool.query(
   `INSERT INTO documents (patient_id, titre, contenu, nom, created_at, source_document)
-   VALUES ($1, $2, $3, $4, NOW(), 'medecin')`,
+   VALUES ($1, $2, $3, $4, NOW(), 'patient')`,
   [
     patientId,
     file.originalname,
