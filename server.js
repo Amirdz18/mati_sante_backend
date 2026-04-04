@@ -2405,15 +2405,15 @@ app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
     }
 
     const result = await pool.query(
-      `
-      SELECT *
-FROM documents
-WHERE patient_id = $1
-ORDER BY id DESC
-      `,
-      [id]
-    );
-
+  `
+  SELECT *
+  FROM documents
+  WHERE patient_id = $1
+    AND source_document = 'patient'
+  ORDER BY id DESC
+  `,
+  [id]
+);
     res.json(result.rows);
   } catch (err) {
     console.log("GET DOCUMENTS ERROR:", err.message);
