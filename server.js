@@ -2588,6 +2588,20 @@ app.post("/documents", upload.single("file"), async (req, res) => {
   }
 });
 
+async function ensureParametresRow() {
+  const res = await pool.query("SELECT id FROM parametres LIMIT 1");
+
+  if (res.rows.length === 0) {
+    const insert = await pool.query(`
+      INSERT INTO parametres (cabinet_nom)
+      VALUES ('Cabinet')
+      RETURNING id
+    `);
+    return insert.rows[0].id;
+  }
+
+  return res.rows[0].id;
+}
 
 app.put("/parametres", async (req, res) => {
   try {
