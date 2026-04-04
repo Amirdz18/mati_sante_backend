@@ -89,6 +89,8 @@ const patientRes = await pool.query(
 const patientData = patientRes.rows[0] || {};
 const patientNomComplet =
   `${patientData.nom || ""} ${patientData.prenom || ""}`.trim() || String(patient_id);
+  console.log("PDF PATIENT =", { patient_id, patientData, patientNomComplet });
+
 
 const cabinet = cab.rows[0] || {};
 const html = `
