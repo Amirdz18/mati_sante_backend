@@ -105,6 +105,8 @@ const age =
   console.log("PDF PATIENT =", { patient_id, patientData, patientNomComplet });
 
 const cabinet = cab.rows[0] || {};
+console.log("CABINET FULL =", cabinet);
+
 const html = `
 <!doctype html>
 <html>
