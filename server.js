@@ -82,6 +82,11 @@ const barcodeRaw = `RX-${patient_id}-${Date.now()}`;
 const cab = await pool.query(
   "SELECT * FROM parametres LIMIT 1"
 );
+
+const cabinetNom = cab.rows[0]?.nom || cab.rows[0]?.cabinet_nom || "";
+const medecinNom = cab.rows[0]?.medecin || cab.rows[0]?.nom_medecin || "";
+console.log("CABINET BACK =", cabinetNom);
+console.log("MEDECIN BACK =", medecinNom);
 const patientRes = await pool.query(
   "SELECT nom, prenom, date_naissance FROM patients WHERE id = $1 LIMIT 1",
   [patient_id]
