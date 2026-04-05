@@ -327,8 +327,9 @@ const html = `
 
     <div class="headerRow">
       <div class="cabLeft">
-  <div class="cabName">${cabinet.nom || ""}</div>
-  <div class="cabDoctor">${cabinet.medecin_nom || ""}</div>
+ <div class="cabName">${cabinetNom || ""}</div>
+<div class="cabDoctor">${medecinNom ? "Dr " + medecinNom : ""}</div>
+
   <div class="cabLine">${cabinet.specialite || ""}</div>
   <div class="cabLine">${cabinet.adresse || ""}</div>
   <div class="cabLine">Tél: ${cabinet.telephone || ""}</div>
