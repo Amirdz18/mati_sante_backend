@@ -55,7 +55,6 @@ cloudinary.api.ping((error, result) => {
   }
 });
 
-
 if (!fs.existsSync("uploads")) {
   fs.mkdirSync("uploads");
 }
@@ -99,7 +98,6 @@ const age =
     ? new Date().getFullYear() - new Date(patientData.date_naissance).getFullYear()
     : "";
   console.log("PDF PATIENT =", { patient_id, patientData, patientNomComplet });
-
 
 const cabinet = cab.rows[0] || {};
 const html = `
@@ -405,7 +403,6 @@ const html = `
   </body>
 </html>
 `;
-
 
   const browser = await puppeteer.launch({
   args: ["--no-sandbox", "--disable-setuid-sandbox"],
@@ -2467,7 +2464,7 @@ app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-g
+
 // ⬇️ AJOUTE LA NOUVELLE ROUTE ICI ⬇️
 
 app.post("/patients/:id/documents", authRequired, medecinOrAdmin, async (req, res) => {
