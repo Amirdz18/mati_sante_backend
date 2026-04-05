@@ -2440,13 +2440,15 @@ app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
       [id]
     );
 
-    res.json(result.rows);
+    res.json({
+      success: true,
+      documents: result.rows
+    });
   } catch (err) {
     console.log("GET DOCUMENTS ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
-
 // ⬇️ AJOUTE LA NOUVELLE ROUTE ICI ⬇️
 
 app.post("/patients/:id/documents", authRequired, medecinOrAdmin, async (req, res) => {
