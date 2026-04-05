@@ -946,27 +946,45 @@ app.get("/patient/:id/rdv", async (req, res) => {
   }
 });
 
-app.get("/patients/:id/documents", async (req, res) => {
+app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
+  const { id } = req.params;
   try {
-    const patient_id = req.params.id;
+    const patient = await pool.query(
+      `
+      SELECT p.id
+      FROM patients p
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE p.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [id, req.user.cabinet_id]
+    );
 
-    const r = await pool.query(`
+    if (patient.rows.length === 0) {
+      return res.status(404).json({ error: "Patient introuvable" });
+    }
+
+    const result = await pool.query(
+      `
       SELECT *
       FROM documents
       WHERE patient_id = $1
-      AND source_document = 'patient'
-      ORDER BY created_at DESC, id DESC
-    `, [patient_id]);
+        AND (source_document = 'medecin' OR source_document IS NULL)
+      ORDER BY id DESC
+      `,
+      [id]
+    );
 
     res.json({
       success: true,
-      documents: r.rows
+      documents: result.rows
     });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "erreur serveur" });
+  } catch (err) {
+    console.log("GET DOCUMENTS ERROR:", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
+
 app.get("/patient/:id/documents", async (req, res) => {
   try {
     const patient_id = req.params.id;
@@ -2448,7 +2466,7 @@ app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+g
 // ⬇️ AJOUTE LA NOUVELLE ROUTE ICI ⬇️
 
 app.post("/patients/:id/documents", authRequired, medecinOrAdmin, async (req, res) => {
@@ -2594,7 +2612,6 @@ app.post("/documents", upload.single("file"), async (req, res) => {
   try {
     const patient_id = req.body?.patient_id ? Number(req.body.patient_id) : null;
     const titre = req.body?.titre || "Document";
-
     const contenu =
       req.body?.note ||
       req.body?.contenu ||
@@ -2607,30 +2624,33 @@ app.post("/documents", upload.single("file"), async (req, res) => {
       return res.status(400).json({ error: "patient_id obligatoire" });
     }
 
-    // Gestion fichier (SANS colonne fichier)
     const filePath = req.file
       ? (req.file.path || `/uploads/${req.file.filename}`)
       : null;
 
     const nom = req.file?.originalname || titre;
 
-    // 👉 IMPORTANT : on met le fichier dans contenu si existe
     const finalContenu = filePath || contenu;
 
     const result = await pool.query(
-      `INSERT INTO documents (patient_id, titre, contenu, nom, source_document)
-       VALUES ($1,$2,$3,$4,'medecin')
-       RETURNING *`,
+      `
+      INSERT INTO documents (patient_id, titre, contenu, nom, source_document)
+      VALUES ($1, $2, $3, $4, 'medecin')
+      RETURNING *
+      `,
       [patient_id, titre, finalContenu, nom]
     );
 
-    res.json(result.rows[0]);
-
+    res.json({
+      success: true,
+      document: result.rows[0]
+    });
   } catch (err) {
     console.log("DOCUMENT ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 async function ensureParametresRow() {
   const res = await pool.query("SELECT id FROM parametres LIMIT 1");
