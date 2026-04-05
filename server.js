@@ -2430,21 +2430,23 @@ app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
     }
 
     const result = await pool.query(
-  `
-  SELECT *
-  FROM documents
-  WHERE patient_id = $1
-    AND source_document = 'patient'
-  ORDER BY id DESC
-  `,
-  [id]
-);
+      `
+      SELECT *
+      FROM documents
+      WHERE patient_id = $1
+        AND (source_document = 'medecin' OR source_document IS NULL)
+      ORDER BY id DESC
+      `,
+      [id]
+    );
+
     res.json(result.rows);
   } catch (err) {
     console.log("GET DOCUMENTS ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
 // ⬇️ AJOUTE LA NOUVELLE ROUTE ICI ⬇️
 
 app.post("/patients/:id/documents", authRequired, medecinOrAdmin, async (req, res) => {
