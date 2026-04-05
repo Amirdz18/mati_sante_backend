@@ -20,6 +20,8 @@ const jwt = require("jsonwebtoken");
 const puppeteer = require("puppeteer");
 const bcrypt = require("bcrypt");
 const cloudinary = require("cloudinary").v2;
+const medecinOrAdmin = requireRole("medecin", "admin");
+const staff = requireRole("secretaire", "medecin", "admin");
 
 // ✅ IMPORTANT : import correct
 const cloudinaryStorage = require("multer-storage-cloudinary");
@@ -1072,8 +1074,6 @@ function requireRole(...allowed) {
   };
 }
 
-const medecinOrAdmin = requireRole("medecin", "admin");
-const staff = requireRole("secretaire", "medecin", "admin");
 
 
 // =============================
