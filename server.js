@@ -383,7 +383,11 @@ const html = `
         <div class="signVisuals">
           <div class="signaturePlaceholder"></div>
         </div>
-        <div class="signDoctorName">Médecin traitant</div>
+        <div class="signDoctorName">
+  ${cabinet.medecin_nom || cabinet.nom_medecin || cabinet.medecin
+    ? "Dr " + (cabinet.medecin_nom || cabinet.nom_medecin || cabinet.medecin)
+    : "Médecin traitant"}
+</div>
         <div class="signLine"></div>
       </div>
     </div>
