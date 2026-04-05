@@ -948,6 +948,7 @@ app.get("/patient/:id/rdv", async (req, res) => {
 
 app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
   const { id } = req.params;
+
   try {
     const patient = await pool.query(
       `
@@ -969,7 +970,6 @@ app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
       SELECT *
       FROM documents
       WHERE patient_id = $1
-        AND (source_document = 'medecin' OR source_document IS NULL)
       ORDER BY id DESC
       `,
       [id]
@@ -984,6 +984,7 @@ app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 app.get("/patient/:id/documents", async (req, res) => {
   try {
@@ -2629,7 +2630,6 @@ app.post("/documents", upload.single("file"), async (req, res) => {
       : null;
 
     const nom = req.file?.originalname || titre;
-
     const finalContenu = filePath || contenu;
 
     const result = await pool.query(
@@ -2650,6 +2650,7 @@ app.post("/documents", upload.single("file"), async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 async function ensureParametresRow() {
