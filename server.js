@@ -2131,10 +2131,11 @@ app.post("/analyses", authRequired, medecinOrAdmin, upload.single("file"), async
     if (conclusion) push("conclusion", conclusion);
 
     if (req.file) {
-  const savedPath = `/uploads/${req.file.filename}`;
+  const savedPath = req.file.path;
   const fileCol = ["chemin_fichier", "fichier", "file", "path", "url", "contenu"].find((c) => cols.has(c));
   if (fileCol) push(fileCol, savedPath);
 }
+
     if (insertCols.length === 0) {
       return res.status(400).json({ error: "Aucune colonne compatible trouvée dans analyses" });
     }
