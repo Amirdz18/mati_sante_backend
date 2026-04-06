@@ -4288,14 +4288,18 @@ app.get("/patient/:id/home-stats", async (req, res) => {
     );
 
     const documentsResult = await pool.query(
-      `
-      SELECT COUNT(*)::int AS count
-      FROM documents
-      WHERE patient_id = $1
-        AND COALESCE(source_document, 'patient') = 'medecin'
-      `,
-      [patient_id]
-    );
+  `
+  SELECT COUNT(*)::int AS count
+  FROM documents
+  WHERE patient_id = $1
+    AND (
+      source_document = 'medecin'
+      OR source_document = 'envoye_patient'
+      OR source_document IS NULL
+    )
+  `,
+  [patient_id]
+);
 
     return res.json({
       success: true,
