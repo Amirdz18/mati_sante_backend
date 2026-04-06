@@ -2384,7 +2384,7 @@ if (!isHttpFile && !isUploadFile) {
     const r = await pool.query(
   `
   INSERT INTO documents (patient_id, titre, contenu, nom, source_document)
-  VALUES ($1, $2, $3, $4, 'envoye_patient')
+  VALUES ($1, $2, $3, $4, 'patient')
   RETURNING *
   `,
   [
