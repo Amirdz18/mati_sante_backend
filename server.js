@@ -4893,6 +4893,28 @@ app.get("/cabinets/:id/annonce", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+app.get("/annonces/actives", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT a.*, c.nom AS cabinet_nom
+      FROM annonces a
+      LEFT JOIN cabinets c ON c.id = a.cabinet_id
+      WHERE a.active = true
+      ORDER BY a.updated_at DESC, a.id DESC
+      `
+    );
+
+    return res.json({
+      success: true,
+      annonces: result.rows,
+    });
+  } catch (err) {
+    console.log("GET /annonces/actives ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
 });
