@@ -2382,7 +2382,7 @@ if (!isHttpFile && !isUploadFile) {
       return res.status(404).json({ error: "Patient introuvable" });
     }
 
-    const r = await pool.query(
+   const r = await pool.query(
   `
   INSERT INTO documents (patient_id, titre, contenu, nom, source_document)
   VALUES ($1, $2, $3, $4, 'envoye_patient')
@@ -2396,12 +2396,13 @@ if (!isHttpFile && !isUploadFile) {
   ]
 );
 
+console.log("SEND EXISTING FILE SAVED =", r.rows[0]);
 
+return res.json({
+  success: true,
+  document: r.rows[0],
+});
 
-    return res.json({
-      success: true,
-      document: r.rows[0],
-    });
   } catch (err) {
     console.log("SEND EXISTING FILE ERROR:", err.message);
     return res.status(500).json({ error: err.message });
