@@ -2384,7 +2384,7 @@ if (!isHttpFile && !isUploadFile) {
     const r = await pool.query(
   `
   INSERT INTO documents (patient_id, titre, contenu, nom, source_document)
-  VALUES ($1, $2, $3, $4, 'medecin')
+  VALUES ($1, $2, $3, $4, 'patient')
   RETURNING *
   `,
   [
@@ -2619,6 +2619,8 @@ app.get("/patient/:id/messages", async (req, res) => {
 
 
 app.post("/documents", upload.single("file"), async (req, res) => {
+
+
   try {
     const patient_id = req.body?.patient_id ? Number(req.body.patient_id) : null;
     const titre = req.body?.titre || "Document";
