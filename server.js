@@ -2461,7 +2461,7 @@ app.get("/patients/:id/documents", authRequired, staff, async (req, res) => {
       SELECT *
       FROM documents
       WHERE patient_id = $1
-        AND (source_document = 'patient' OR source_document = 'medecin' OR source_document IS NULL)
+        AND source_document = 'patient'
       ORDER BY id DESC
       `,
       [id]
