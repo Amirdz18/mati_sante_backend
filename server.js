@@ -1012,16 +1012,17 @@ app.get("/patient/:id/documents", async (req, res) => {
     }
 
     const r = await pool.query(`
-      SELECT *
-      FROM documents
-      WHERE patient_id = $1
-      AND (
-        source_document = 'patient'
-        OR source_document = 'medecin'
-        OR source_document IS NULL
-      )
-      ORDER BY created_at DESC, id DESC
-    `, [patient_id]);
+  SELECT *
+  FROM documents
+  WHERE patient_id = $1
+  AND (
+    source_document = 'patient'
+    OR source_document = 'medecin'
+    OR source_document = 'envoye_patient'
+    OR source_document IS NULL
+  )
+  ORDER BY created_at DESC, id DESC
+`, [patient_id]);
 
     res.json({
       success: true,
@@ -2384,7 +2385,7 @@ if (!isHttpFile && !isUploadFile) {
     const r = await pool.query(
   `
   INSERT INTO documents (patient_id, titre, contenu, nom, source_document)
-  VALUES ($1, $2, $3, $4, 'patient')
+  VALUES ($1, $2, $3, $4, 'envoye_patient')
   RETURNING *
   `,
   [
