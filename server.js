@@ -4802,6 +4802,97 @@ app.get("/debug/delete-analyses", async (req, res) => {
     res.status(500).json({ error: "erreur suppression" });
   }
 });
+app.post("/annonces", authRequired, medecinOrAdmin, async (req, res) => {
+  try {
+    const cabinet_id = req.user?.cabinet_id;
+    const titre = (req.body?.titre || "").trim();
+    const contenu = (req.body?.contenu || "").trim();
+    const active = req.body?.active !== false;
+
+    if (!cabinet_id) {
+      return res.status(400).json({ error: "cabinet_id introuvable" });
+    }
+
+    if (!titre || !contenu) {
+      return res.status(400).json({ error: "titre et contenu obligatoires" });
+    }
+
+    const existing = await pool.query(
+      `
+      SELECT id
+      FROM annonces
+      WHERE cabinet_id = $1
+      ORDER BY id DESC
+      LIMIT 1
+      `,
+      [cabinet_id]
+    );
+
+    let result;
+
+    if (existing.rows.length > 0) {
+      result = await pool.query(
+        `
+        UPDATE annonces
+        SET titre = $1,
+            contenu = $2,
+            active = $3,
+            updated_at = NOW()
+        WHERE cabinet_id = $4
+        RETURNING *
+        `,
+        [titre, contenu, active, cabinet_id]
+      );
+    } else {
+      result = await pool.query(
+        `
+        INSERT INTO annonces (cabinet_id, titre, contenu, active)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+        `,
+        [cabinet_id, titre, contenu, active]
+      );
+    }
+
+    return res.json({
+      success: true,
+      annonce: result.rows[0],
+    });
+  } catch (err) {
+    console.log("POST /annonces ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/cabinets/:id/annonce", async (req, res) => {
+  try {
+    const cabinet_id = Number(req.params.id);
+
+    if (!cabinet_id) {
+      return res.status(400).json({ error: "cabinet_id invalide" });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM annonces
+      WHERE cabinet_id = $1
+        AND active = true
+      ORDER BY updated_at DESC, id DESC
+      LIMIT 1
+      `,
+      [cabinet_id]
+    );
+
+    return res.json({
+      success: true,
+      annonce: result.rows[0] || null,
+    });
+  } catch (err) {
+    console.log("GET /cabinets/:id/annonce ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
 });
