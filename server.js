@@ -2131,10 +2131,22 @@ app.post("/analyses", authRequired, medecinOrAdmin, upload.single("file"), async
     if (conclusion) push("conclusion", conclusion);
 
     if (req.file) {
-  const savedPath = req.file.path;
+  const uploaded = await cloudinary.uploader.upload(req.file.path, {
+    folder: "mati-sante",
+    resource_type: "auto",
+    public_id: `analyse_${patient_id}_${Date.now()}`,
+    overwrite: true,
+  });
+
+  if (fs.existsSync(req.file.path)) {
+    fs.unlinkSync(req.file.path);
+  }
+
+  const savedPath = uploaded.secure_url;
   const fileCol = ["chemin_fichier", "fichier", "file", "path", "url", "contenu"].find((c) => cols.has(c));
   if (fileCol) push(fileCol, savedPath);
 }
+
 
     if (insertCols.length === 0) {
       return res.status(400).json({ error: "Aucune colonne compatible trouvée dans analyses" });
