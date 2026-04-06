@@ -4914,6 +4914,30 @@ app.get("/annonces/actives", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+app.delete("/annonces", authRequired, medecinOrAdmin, async (req, res) => {
+  try {
+    const cabinet_id = req.user?.cabinet_id;
+
+    if (!cabinet_id) {
+      return res.status(400).json({ error: "cabinet_id introuvable" });
+    }
+
+    await pool.query(
+      `
+      DELETE FROM annonces
+      WHERE cabinet_id = $1
+      `,
+      [cabinet_id]
+    );
+
+    return res.json({
+      success: true,
+    });
+  } catch (err) {
+    console.log("DELETE /annonces ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
