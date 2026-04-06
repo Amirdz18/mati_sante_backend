@@ -2398,6 +2398,19 @@ if (!isHttpFile && !isUploadFile) {
 
 console.log("SEND EXISTING FILE SAVED =", r.rows[0]);
 
+await pool.query(
+  `
+  INSERT INTO notifications (patient_id, titre, message, type_notification, lu, created_at)
+  VALUES ($1, $2, $3, $4, false, NOW())
+  `,
+  [
+    patient_id,
+    "Nouveau document",
+    `${titre || "Document médical"} envoyé par votre médecin`,
+    "document"
+  ]
+);
+
 return res.json({
   success: true,
   document: r.rows[0],
