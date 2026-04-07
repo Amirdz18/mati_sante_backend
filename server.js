@@ -2170,24 +2170,41 @@ app.post("/imagerie", authRequired, medecinOrAdmin, upload.single("file"), async
     const patient_id = req.body?.patient_id ? Number(req.body.patient_id) : null;
     const type_imagerie = req.body?.type_imagerie || null;
     const remarque = req.body?.remarque || null;
-   const fichier = req.file ? `/uploads/${req.file.filename}` : null;
 
     if (!patient_id) {
       return res.status(400).json({ error: "patient_id obligatoire" });
     }
 
     const patient = await pool.query(
-  `
-  SELECT p.id
-  FROM patients p
-  JOIN cabinet_patients cp ON cp.patient_id = p.id
-  WHERE p.id = $1 AND cp.cabinet_id = $2
-  LIMIT 1
-  `,
-  [patient_id, req.user.cabinet_id]
-);
+      `
+      SELECT p.id
+      FROM patients p
+      JOIN cabinet_patients cp ON cp.patient_id = p.id
+      WHERE p.id = $1 AND cp.cabinet_id = $2
+      LIMIT 1
+      `,
+      [patient_id, req.user.cabinet_id]
+    );
+
     if (patient.rows.length === 0) {
       return res.status(404).json({ error: "Patient introuvable" });
+    }
+
+    let fichier = null;
+
+    if (req.file) {
+      const uploaded = await cloudinary.uploader.upload(req.file.path, {
+        folder: "mati-sante",
+        resource_type: "auto",
+        public_id: `imagerie_${patient_id}_${Date.now()}`,
+        overwrite: true,
+      });
+
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+
+      fichier = uploaded.secure_url;
     }
 
     const result = await pool.query(
@@ -2203,7 +2220,6 @@ app.post("/imagerie", authRequired, medecinOrAdmin, upload.single("file"), async
     res.status(500).json({ error: err.message });
   }
 });
-
 app.delete("/imagerie/:id", authRequired, staff, async (req, res) => {
   const { id } = req.params;
 
