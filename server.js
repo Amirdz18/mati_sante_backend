@@ -4954,6 +4954,97 @@ app.delete("/annonces", authRequired, medecinOrAdmin, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+app.post("/licences/check", async (req, res) => {
+  try {
+    const { cle_licence, machine_id, nom_poste, version } = req.body || {};
+
+    if (!cle_licence || !machine_id) {
+      return res.status(400).json({ error: "cle_licence et machine_id requis" });
+    }
+
+    const licenceResult = await pool.query(
+      `
+      SELECT *
+      FROM licences
+      WHERE cle_licence = $1
+      LIMIT 1
+      `,
+      [String(cle_licence).trim()]
+    );
+
+    if (licenceResult.rows.length === 0) {
+      return res.status(404).json({ error: "Licence introuvable" });
+    }
+
+    const licence = licenceResult.rows[0];
+
+    if (!licence.active) {
+      return res.status(403).json({ error: "Licence désactivée" });
+    }
+
+    if (version && licence.version_autorisee && String(version) !== String(licence.version_autorisee)) {
+      return res.status(403).json({
+        error: "Version non autorisée pour cette licence",
+      });
+    }
+
+    const postesResult = await pool.query(
+      `
+      SELECT *
+      FROM licence_postes
+      WHERE licence_id = $1
+      ORDER BY id ASC
+      `,
+      [licence.id]
+    );
+
+    const existingPoste = postesResult.rows.find(
+      (p) => String(p.machine_id) === String(machine_id)
+    );
+
+    if (existingPoste) {
+      await pool.query(
+        `
+        UPDATE licence_postes
+        SET dernier_acces = NOW(),
+            nom_poste = $1,
+            actif = true
+        WHERE id = $2
+        `,
+        [nom_poste || null, existingPoste.id]
+      );
+
+      return res.json({
+        success: true,
+        licence,
+        message: "Licence valide",
+      });
+    }
+
+    if ((postesResult.rows.length || 0) >= Number(licence.nb_postes_max || 1)) {
+      return res.status(403).json({
+        error: "Nombre maximal de postes atteint pour cette licence",
+      });
+    }
+
+    await pool.query(
+      `
+      INSERT INTO licence_postes (licence_id, machine_id, nom_poste, actif, date_activation, dernier_acces)
+      VALUES ($1, $2, $3, true, NOW(), NOW())
+      `,
+      [licence.id, machine_id, nom_poste || null]
+    );
+
+    return res.json({
+      success: true,
+      licence,
+      message: "Licence activée sur ce poste",
+    });
+  } catch (err) {
+    console.log("POST /licences/check ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
