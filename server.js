@@ -4954,6 +4954,77 @@ app.delete("/annonces", authRequired, medecinOrAdmin, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+app.post("/licences/generate", authRequired, async (req, res) => {
+  try {
+    const {
+      cabinet_id,
+      nom_licence,
+      nb_postes_max,
+      version_autorisee,
+    } = req.body || {};
+
+    if (!cabinet_id) {
+      return res.status(400).json({ error: "cabinet_id requis" });
+    }
+
+    let cle_licence = "";
+    let exists = true;
+
+    while (exists) {
+      cle_licence = generateLicenceKey();
+
+      const check = await pool.query(
+        `SELECT id FROM licences WHERE cle_licence = $1 LIMIT 1`,
+        [cle_licence]
+      );
+
+      exists = check.rows.length > 0;
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO licences (
+        cabinet_id,
+        cle_licence,
+        nom_licence,
+        nb_postes_max,
+        version_autorisee,
+        active
+      )
+      VALUES ($1, $2, $3, $4, $5, true)
+      RETURNING *
+      `,
+      [
+        Number(cabinet_id),
+        cle_licence,
+        nom_licence || "Licence Cabinet",
+        Number(nb_postes_max || 1),
+        version_autorisee || "0.1.0",
+      ]
+    );
+
+    return res.json({
+      success: true,
+      licence: result.rows[0],
+    });
+  } catch (err) {
+    console.log("POST /licences/generate ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+function generateLicenceKey() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+  const part = (len = 4) => {
+    let out = "";
+    for (let i = 0; i < len; i++) {
+      out += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return out;
+  };
+
+  return `MATI-CAB-${new Date().getFullYear()}-${part(4)}-${part(4)}`;
+}
 app.post("/licences/check", async (req, res) => {
   try {
     const { cle_licence, machine_id, nom_poste, version } = req.body || {};
