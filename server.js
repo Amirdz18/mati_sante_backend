@@ -5012,6 +5012,22 @@ app.post("/licences/generate", authRequired, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+app.get("/licences", authRequired, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM licences ORDER BY id DESC`
+    );
+
+    return res.json({
+      success: true,
+      licences: result.rows,
+    });
+  } catch (err) {
+    console.log("GET /licences ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 function generateLicenceKey() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
