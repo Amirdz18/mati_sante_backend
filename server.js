@@ -4967,7 +4967,8 @@ app.post("/licences/generate", async (req, res) => {
       nom_licence,
       nb_postes_max,
       version_autorisee,
-    } = req
+    } = req.body || {};
+
     if (!cabinet_id) {
       return res.status(400).json({ error: "cabinet_id requis" });
     }
@@ -5017,6 +5018,7 @@ app.post("/licences/generate", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+
 app.get("/licences", authRequired, async (req, res) => {
   try {
     const result = await pool.query(
