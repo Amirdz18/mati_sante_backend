@@ -5132,7 +5132,15 @@ app.post("/licences/check", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-
+app.get("/cabinets", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT id, nom FROM cabinets ORDER BY nom ASC");
+    res.json(result.rows);
+  } catch (err) {
+    console.log("GET /cabinets ERROR:", err.message);
+    res.status(500).json({ error: "Erreur récupération cabinets" });
+  }
+});
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
 });
