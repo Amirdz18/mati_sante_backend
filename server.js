@@ -5132,6 +5132,7 @@ app.post("/licences/check", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+
 app.get("/cabinets", async (req, res) => {
   try {
     const result = await pool.query("SELECT id, nom FROM cabinets ORDER BY nom ASC");
