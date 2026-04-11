@@ -5183,6 +5183,13 @@ app.get("/cabinets", async (req, res) => {
     res.status(500).json({ error: "Erreur récupération cabinets" });
   }
 });
+app.get("/app-version", (req, res) => {
+  res.json({
+    version: "1.0.1",
+    url: "https://ton-lien-de-telechargement/setup.exe",
+    notes: "Corrections et améliorations du logiciel"
+  });
+});
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
 });
