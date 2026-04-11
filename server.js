@@ -811,11 +811,19 @@ app.post("/patient/register", async (req, res) => {
 );
 
 if (exist.rows.length > 0) {
-  return res.status(409).json({
-    error: "Ce numéro de téléphone ou cet email existe déjà"
+  const patientId = exist.rows[0].id;
+  const hash = await bcrypt.hash(password, 10);
+
+  await pool.query(
+    "UPDATE patients SET password_hash = $1 WHERE id = $2",
+    [hash, patientId]
+  );
+
+  return res.json({
+    success: true,
+    message: "Compte activé, vous pouvez vous connecter"
   });
 }
-
 const hash = await bcrypt.hash(password, 10);
     const r = await pool.query(
       `INSERT INTO patients(nom, prenom, telephone, email, password_hash, cabinet_id, is_mobile_account)
@@ -841,17 +849,20 @@ await pool.query(
 
 app.post("/patient/login", async (req, res) => {
   try {
-    const email = String(req.body.email || "").trim().toLowerCase();
-    const password = String(req.body.password || "");
+    const identifier = String(req.body.email || req.body.telephone || "").trim().toLowerCase();
+const password = String(req.body.password || "");
 
-    if (!email || !password) {
-      return res.status(400).json({ error: "email et password requis" });
-    }
+if (!identifier || !password) {
+  return res.status(400).json({ error: "email ou telephone et password requis" });
+}
 
-    const r = await pool.query(
-      "SELECT * FROM patients WHERE LOWER(TRIM(email)) = $1 LIMIT 1",
-      [email]
-    );
+const r = await pool.query(
+  `SELECT * FROM patients
+   WHERE LOWER(TRIM(email)) = $1
+      OR telephone = $1
+   LIMIT 1`,
+  [identifier]
+);
 
     if (r.rows.length === 0) {
       return res.status(401).json({ error: "patient introuvable" });
