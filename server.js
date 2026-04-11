@@ -736,10 +736,18 @@ app.post("/auth/login", async (req, res) => {
       return res.status(403).json({ error: "Compte désactivé" });
     }
 
-    const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) {
-      return res.status(401).json({ error: "Identifiants invalides" });
-    }
+    if (!user.password_hash) {
+  return res.status(401).json({
+    error: "Compte non activé. Veuillez d'abord définir votre mot de passe."
+  });
+}
+
+const ok = await bcrypt.compare(password, user.password_hash);
+
+if (!ok) {
+  return res.status(401).json({ error: "Identifiants invalides" });
+}
+
 
     const token = jwt.sign(
   { id: user.id, email: user.email, role: user.role, cabinet_id: user.cabinet_id },
