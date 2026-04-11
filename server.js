@@ -820,6 +820,20 @@ app.post("/patient/register", async (req, res) => {
 
 if (exist.rows.length > 0) {
   const patientId = exist.rows[0].id;
+
+  const existingPatient = await pool.query(
+    "SELECT id, password_hash FROM patients WHERE id = $1 LIMIT 1",
+    [patientId]
+  );
+
+  const patient = existingPatient.rows[0];
+
+  if (patient.password_hash) {
+    return res.status(409).json({
+      error: "Ce compte existe déjà. Veuillez vous connecter."
+    });
+  }
+
   const hash = await bcrypt.hash(password, 10);
 
   await pool.query(
@@ -832,6 +846,7 @@ if (exist.rows.length > 0) {
     message: "Compte activé, vous pouvez vous connecter"
   });
 }
+
 const hash = await bcrypt.hash(password, 10);
     const r = await pool.query(
       `INSERT INTO patients(nom, prenom, telephone, email, password_hash, cabinet_id, is_mobile_account)
