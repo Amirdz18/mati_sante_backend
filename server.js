@@ -2748,14 +2748,16 @@ app.put("/parametres", async (req, res) => {
     const id = await ensureParametresRow();
 
     const payload = {
-      cabinet_nom: req.body.cabinet_nom ?? null,
-      medecin_nom: req.body.medecin_nom ?? null,
-      adresse: req.body.adresse ?? null,
-      telephone: req.body.telephone ?? null,
-      email: req.body.email ?? null,
-      ville: req.body.ville ?? null,
-      note_entete: req.body.note_entete ?? null,
-    };
+  cabinet_nom: req.body.cabinet_nom ?? null,
+  medecin_nom: req.body.medecin_nom ?? null,
+  specialite: req.body.specialite ?? null,
+  numero_ordre: req.body.numero_ordre ?? null,
+  adresse: req.body.adresse ?? null,
+  telephone: req.body.telephone ?? null,
+  email: req.body.email ?? null,
+  ville: req.body.ville ?? null,
+  note_entete: req.body.note_entete ?? null,
+};
 
     const upd = await pool.query(
       `UPDATE parametres SET
