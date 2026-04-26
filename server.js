@@ -3929,6 +3929,8 @@ app.get("/dashboard/stats", async (req, res) => {
 
 app.get("/dashboard/document-recu-notification", async (req, res) => {
   try {
+    const cabinetId = req.user.cabinet_id;
+
     const r = await pool.query(`
       SELECT
         d.id,
@@ -3939,11 +3941,13 @@ app.get("/dashboard/document-recu-notification", async (req, res) => {
         COALESCE(p.nom, '') || ' ' || COALESCE(p.prenom, '') AS patient_nom
       FROM documents d
       LEFT JOIN patients p ON p.id = d.patient_id
-      WHERE COALESCE(d.lu_dashboard, false) = false
+      WHERE d.cabinet_id = $1
+        AND COALESCE(d.lu_dashboard, false) = false
         AND COALESCE(d.source_document, 'patient') = 'patient'
       ORDER BY d.created_at DESC, d.id DESC
       LIMIT 1
-    `);
+    `, [cabinetId]);
+
     res.json(r.rows[0] || null);
   } catch (err) {
     console.log("DASHBOARD DOCUMENT NOTIF ERROR:", err.message);
@@ -3971,18 +3975,23 @@ app.post("/dashboard/document-recu-notification/:id/read", async (req, res) => {
 });
 app.get("/dashboard/documents-count", async (req, res) => {
   try {
+    const cabinetId = req.user.cabinet_id;
+
     const r = await pool.query(`
       SELECT COUNT(*)
       FROM documents
-      WHERE COALESCE(lu_dashboard,false) = false
-        AND COALESCE(source_document, 'patient') = 'patient'
-    `);
+      WHERE cabinet_id = $1
+      AND COALESCE(lu_dashboard,false) = false
+      AND COALESCE(source_document, 'patient') = 'patient'
+    `, [cabinetId]);
+
     res.json({ count: Number(r.rows[0].count || 0) });
   } catch (err) {
     console.log("DOC COUNT ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
 app.get("/medicaments", async (req, res) => {
   try {
     const search = req.query.search || "";
