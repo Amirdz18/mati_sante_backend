@@ -3938,7 +3938,6 @@ app.get("/dashboard/stats", authRequired, async (req, res) => {
 });
 
 
-
 app.get("/dashboard/document-recu-notification", authRequired, async (req, res) => {
   try {
     const cabinetId = req.user?.cabinet_id;
@@ -3981,51 +3980,7 @@ app.post("/dashboard/document-recu-notification/:id/read", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.get("/dashboard/stats", authRequired, async (req, res) => {
-  try {
-    const cabinetId = req.user?.cabinet_id;
 
-    if (!cabinetId) {
-      return res.json({
-        patients: 0,
-        consultations: 0,
-        rendezvous: 0,
-        demandes: 0,
-      });
-    }
-
-    const patients = await pool.query(
-      "SELECT COUNT(*) FROM patients WHERE cabinet_id = $1 AND actif = true",
-      [cabinetId]
-    );
-
-    const consultations = await pool.query(
-      "SELECT COUNT(*) FROM consultations WHERE cabinet_id = $1 AND date_consultation = CURRENT_DATE",
-      [cabinetId]
-    );
-
-    const rdv = await pool.query(
-      "SELECT COUNT(*) FROM rendez_vous WHERE cabinet_id = $1 AND date_rdv = CURRENT_DATE AND statut <> 'annule'",
-      [cabinetId]
-    );
-
-    const demandes = await pool.query(
-      "SELECT COUNT(*) FROM rendez_vous WHERE cabinet_id = $1 AND statut = 'demande'",
-      [cabinetId]
-    );
-
-    res.json({
-      patients: Number(patients.rows[0].count || 0),
-      consultations: Number(consultations.rows[0].count || 0),
-      rendezvous: Number(rdv.rows[0].count || 0),
-      demandes: Number(demandes.rows[0].count || 0),
-    });
-
-  } catch (err) {
-    console.log("DASHBOARD STATS ERROR:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 app.get("/posologie", async (req,res)=>{
   try{
