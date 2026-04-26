@@ -4754,22 +4754,7 @@ app.delete("/patient/message/:id", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-app.get("/dashboard/messages-count", async (req, res) => {
-  try {
-    const cabinetId = req.user.cabinet_id;
 
-    const r = await pool.query(`
-      SELECT COUNT(*)
-      FROM messages
-      WHERE cabinet_id = $1
-    `, [cabinetId]);
-
-    res.json({ count: Number(r.rows[0].count || 0) });
-  } catch (err) {
-    console.log("MESSAGES COUNT ERROR:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 app.post("/messages/mark-read", authRequired, staff, async (req, res) => {
   const patient_id = Number(req.query.patient_id);
