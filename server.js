@@ -3586,10 +3586,12 @@ function requireAdmin(req, res, next) {
 app.get("/users", authRequired, requireAdmin, async (req, res) => {
   try {
     const r = await pool.query(
-      `SELECT id, nom, email, role, is_active, created_at, updated_at
-       FROM medecins
-       ORDER BY id DESC`
-    );
+  `SELECT id, nom, email, role, is_active, created_at, updated_at
+   FROM medecins
+   WHERE cabinet_id = $1
+   ORDER BY id DESC`,
+  [req.user.cabinet_id]
+);
     res.json(r.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
