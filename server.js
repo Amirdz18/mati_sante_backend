@@ -5225,10 +5225,9 @@ app.get("/dashboard/messages-count", authRequired, async (req, res) => {
   try {
     const cabinetId = req.user.cabinet_id;
 
-    // 🔥 Version sécurisée (marche même si structure différente)
     const r = await pool.query(
       `
-      SELECT COUNT(*) 
+      SELECT COUNT(*)
       FROM avis_medicaux
       WHERE cabinet_id = $1
       `,
@@ -5236,14 +5235,11 @@ app.get("/dashboard/messages-count", authRequired, async (req, res) => {
     );
 
     res.json({ count: Number(r.rows[0].count || 0) });
-
   } catch (err) {
-    console.log("MESSAGES COUNT ERROR:", err);
-    res.json({ count: 0 }); // 🔥 évite crash frontend
+    console.log("MESSAGES COUNT ERROR:", err.message);
+    res.json({ count: 0 });
   }
 });
-
-
 
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
