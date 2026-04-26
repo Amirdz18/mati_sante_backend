@@ -3896,9 +3896,9 @@ app.get("/dashboard/stats", async (req, res) => {
     const cabinetId = req.user.cabinet_id;
 
     const patients = await pool.query(
-      "SELECT COUNT(*) FROM patients WHERE cabinet_id = $1 AND is_mobile_account = false AND actif = true",
-      [cabinetId]
-    );
+  "SELECT COUNT(*) FROM patients WHERE cabinet_id = $1",
+  [cabinetId]
+);
 
     const consultations = await pool.query(
       "SELECT COUNT(*) FROM consultations WHERE cabinet_id = $1 AND date_consultation = CURRENT_DATE",
@@ -3906,9 +3906,10 @@ app.get("/dashboard/stats", async (req, res) => {
     );
 
     const rdv = await pool.query(
-      "SELECT COUNT(*) FROM rendez_vous WHERE cabinet_id = $1 AND date_rdv = CURRENT_DATE AND statut <> 'annule'",
-      [cabinetId]
-    );
+  "SELECT COUNT(*) FROM rendez_vous WHERE cabinet_id = $1 AND DATE(date_rdv) = CURRENT_DATE AND statut <> 'annule'",
+  [cabinetId]
+);
+
 
     const demandes = await pool.query(
       "SELECT COUNT(*) FROM rendez_vous WHERE cabinet_id = $1 AND statut = 'demande'",
