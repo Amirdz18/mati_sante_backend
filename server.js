@@ -3974,7 +3974,7 @@ app.post("/dashboard/document-recu-notification/:id/read", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-pp.get("/dashboard/documents-count", authRequired, async (req, res) => {
+app.get("/dashboard/documents-count", authRequired, async (req, res) => {
   try {
     const cabinetId = req.user.cabinet_id;
 
