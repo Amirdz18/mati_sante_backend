@@ -3894,84 +3894,118 @@ app.get("/rdv-demandes", authRequired, async (req, res) => {
 app.get("/dashboard/stats", authRequired, async (req, res) => {
   try {
     const cabinetId = req.user?.cabinet_id;
-
     if (!cabinetId) {
-      return res.json({
-        patients: 0,
-        consultations: 0,
-        rendezvous: 0,
-        demandes: 0,
-      });
+      return res.json({ patients: 0, rendezvous: 0, consultations: 0, demandes: 0 });
     }
 
-    const patients = await pool.query(`
-      SELECT COUNT(*) FROM patients
-      WHERE cabinet_id = $1
-      AND is_mobile_account = false
-      AND actif = true
-    `, [cabinetId]);
+    const patients = await pool.query(
+      "SELECT COUNT(*) FROM patients WHERE cabinet_id = $1",
+      [cabinetId]
+    );
 
-    const consultations = await pool.query(`
-      SELECT COUNT(*) FROM consultations
-      WHERE cabinet_id = $1
-      AND date_consultation = CURRENT_DATE
-    `, [cabinetId]);
+    const rdv = await pool.query(
+      "SELECT COUNT(*) FROM rendez_vous WHERE cabinet_id = $1 AND DATE(date_rdv) = CURRENT_DATE AND statut <> 'annule'",
+      [cabinetId]
+    );
 
-    const rdv = await pool.query(`
-      SELECT COUNT(*) FROM rendez_vous
-      WHERE cabinet_id = $1
-      AND date_rdv = CURRENT_DATE
-      AND statut <> 'annule'
-    `, [cabinetId]);
+    const demandes = await pool.query(
+      "SELECT COUNT(*) FROM rendez_vous WHERE cabinet_id = $1 AND statut = 'demande'",
+      [cabinetId]
+    );
 
-    const demandes = await pool.query(`
-      SELECT COUNT(*) FROM rendez_vous
-      WHERE cabinet_id = $1
-      AND statut = 'demande'
-    `, [cabinetId]);
+    const consultations = await pool.query(
+      `
+      SELECT COUNT(*)
+      FROM consultations c
+      JOIN patients p ON p.id = c.patient_id
+      WHERE p.cabinet_id = $1
+        AND DATE(c.date_consultation) = CURRENT_DATE
+      `,
+      [cabinetId]
+    );
 
     res.json({
       patients: Number(patients.rows[0].count || 0),
-      consultations: Number(consultations.rows[0].count || 0),
       rendezvous: Number(rdv.rows[0].count || 0),
+      consultations: Number(consultations.rows[0].count || 0),
       demandes: Number(demandes.rows[0].count || 0),
     });
-
   } catch (err) {
     console.log("DASHBOARD STATS ERROR:", err.message);
-    res.json({
-      patients: 0,
-      consultations: 0,
-      rendezvous: 0,
-      demandes: 0,
-    });
+    res.json({ patients: 0, rendezvous: 0, consultations: 0, demandes: 0 });
   }
 });
 
+app.get("/dashboard/messages-count", authRequired, async (req, res) => {
+  try {
+    const cabinetId = req.user?.cabinet_id;
+    if (!cabinetId) return res.json({ count: 0 });
 
+    const r = await pool.query(
+      "SELECT COUNT(*) FROM avis_medicaux WHERE cabinet_id = $1",
+      [cabinetId]
+    );
+
+    res.json({ count: Number(r.rows[0].count || 0) });
+  } catch (err) {
+    console.log("MESSAGES COUNT ERROR:", err.message);
+    res.json({ count: 0 });
+  }
+});
+
+app.get("/dashboard/documents-count", authRequired, async (req, res) => {
+  try {
+    const cabinetId = req.user?.cabinet_id;
+    if (!cabinetId) return res.json({ count: 0 });
+
+    const r = await pool.query(
+      `
+      SELECT COUNT(*)
+      FROM documents d
+      JOIN patients p ON p.id = d.patient_id
+      WHERE p.cabinet_id = $1
+        AND COALESCE(d.lu_dashboard, false) = false
+        AND COALESCE(d.source_document, 'patient') = 'patient'
+      `,
+      [cabinetId]
+    );
+
+    res.json({ count: Number(r.rows[0].count || 0) });
+  } catch (err) {
+    console.log("DOC COUNT ERROR:", err.message);
+    res.json({ count: 0 });
+  }
+});
 
 app.get("/dashboard/document-recu-notification", authRequired, async (req, res) => {
   try {
     const cabinetId = req.user?.cabinet_id;
+    if (!cabinetId) return res.json(null);
 
-    const r = await pool.query(`
-      SELECT d.id, d.nom, d.titre, d.created_at,
-             COALESCE(p.nom,'') || ' ' || COALESCE(p.prenom,'') AS patient_nom
+    const r = await pool.query(
+      `
+      SELECT d.id, d.nom, d.titre, d.contenu, d.created_at,
+             COALESCE(p.nom, '') || ' ' || COALESCE(p.prenom, '') AS patient_nom
       FROM documents d
-      LEFT JOIN patients p ON p.id = d.patient_id
+      JOIN patients p ON p.id = d.patient_id
       WHERE p.cabinet_id = $1
-        AND COALESCE(d.lu_dashboard,false) = false
-      ORDER BY d.created_at DESC
+        AND COALESCE(d.lu_dashboard, false) = false
+        AND COALESCE(d.source_document, 'patient') = 'patient'
+      ORDER BY d.created_at DESC, d.id DESC
       LIMIT 1
-    `, [cabinetId]);
+      `,
+      [cabinetId]
+    );
 
     res.json(r.rows[0] || null);
-
   } catch (err) {
-    console.log("DOC NOTIF ERROR:", err.message);
-    res.status(500).json({ error: err.message });
+    console.log("DASHBOARD DOCUMENT NOTIF ERROR:", err.message);
+    res.json(null);
   }
 });
+
+
+
 
 app.post("/dashboard/document-recu-notification/:id/read", async (req, res) => {
   try {
@@ -5140,27 +5174,6 @@ app.get("/app/version", (req, res) => {
     url: "https://github.com/Amirdz18/mati-connect/releases/download/v0.1.0/Mati.Sante.Setup.0.1.0.exe",
     notes: "Corrections et améliorations"
   });
-});
-app.get("/dashboard/messages-count", authRequired, async (req, res) => {
-  try {
-    const cabinetId = req.user?.cabinet_id;
-
-    if (!cabinetId) {
-      return res.json({ count: 0 });
-    }
-
-    const r = await pool.query(`
-      SELECT COUNT(*)
-      FROM messages m
-      WHERE m.cabinet_id = $1
-    `, [cabinetId]);
-
-    res.json({ count: Number(r.rows[0].count || 0) });
-
-  } catch (err) {
-    console.log("MESSAGES COUNT ERROR:", err.message);
-    res.json({ count: 0 }); // ⚠️ jamais crash
-  }
 });
 
 app.listen(PORT, () => {
