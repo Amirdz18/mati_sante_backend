@@ -3891,41 +3891,27 @@ app.get("/rdv-demandes", authRequired, async (req, res) => {
 });
 
 /* ================= DASHBOARD ================= */
-app.get("/dashboard/stats", async (req, res) => {
+app.get("/dashboard/stats", authRequired, async (req, res) => {
   try {
     const cabinetId = req.user.cabinet_id;
 
     const patients = await pool.query(
-      `SELECT COUNT(*) 
-       FROM patients 
-       WHERE cabinet_id = $1 
-       AND is_mobile_account = false 
-       AND actif = true`,
+      "SELECT COUNT(*) FROM patients WHERE cabinet_id = $1",
       [cabinetId]
     );
 
     const consultations = await pool.query(
-      `SELECT COUNT(*) 
-       FROM consultations 
-       WHERE cabinet_id = $1 
-       AND date_consultation = CURRENT_DATE`,
+      "SELECT COUNT(*) FROM consultations WHERE cabinet_id = $1 AND DATE(date_consultation) = CURRENT_DATE",
       [cabinetId]
     );
 
     const rdv = await pool.query(
-      `SELECT COUNT(*) 
-       FROM rendez_vous 
-       WHERE cabinet_id = $1 
-       AND date_rdv = CURRENT_DATE 
-       AND statut <> 'annule'`,
+      "SELECT COUNT(*) FROM rendez_vous WHERE cabinet_id = $1 AND DATE(date_rdv) = CURRENT_DATE AND statut <> 'annule'",
       [cabinetId]
     );
 
     const demandes = await pool.query(
-      `SELECT COUNT(*) 
-       FROM rendez_vous 
-       WHERE cabinet_id = $1 
-       AND statut = 'demande'`,
+      "SELECT COUNT(*) FROM rendez_vous WHERE cabinet_id = $1 AND statut = 'demande'",
       [cabinetId]
     );
 
@@ -3943,11 +3929,12 @@ app.get("/dashboard/stats", async (req, res) => {
 
 
 
-app.get("/dashboard/document-recu-notification", async (req, res) => {
+app.get("/dashboard/document-recu-notification", authRequired, async (req, res) => {
   try {
     const cabinetId = req.user.cabinet_id;
 
-    const r = await pool.query(`
+    const r = await pool.query(
+      `
       SELECT d.id, d.nom, d.titre, d.contenu, d.created_at,
       COALESCE(p.nom, '') || ' ' || COALESCE(p.prenom, '') AS patient_nom
       FROM documents d
@@ -3957,7 +3944,9 @@ app.get("/dashboard/document-recu-notification", async (req, res) => {
         AND COALESCE(d.source_document, 'patient') = 'patient'
       ORDER BY d.created_at DESC, d.id DESC
       LIMIT 1
-    `, [cabinetId]);
+      `,
+      [cabinetId]
+    );
 
     res.json(r.rows[0] || null);
   } catch (err) {
@@ -3985,17 +3974,20 @@ app.post("/dashboard/document-recu-notification/:id/read", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.get("/dashboard/documents-count", async (req, res) => {
+pp.get("/dashboard/documents-count", authRequired, async (req, res) => {
   try {
     const cabinetId = req.user.cabinet_id;
 
-    const r = await pool.query(`
+    const r = await pool.query(
+      `
       SELECT COUNT(*)
       FROM documents
       WHERE cabinet_id = $1
         AND COALESCE(lu_dashboard,false) = false
         AND COALESCE(source_document, 'patient') = 'patient'
-    `, [cabinetId]);
+      `,
+      [cabinetId]
+    );
 
     res.json({ count: Number(r.rows[0].count || 0) });
   } catch (err) {
@@ -4003,62 +3995,6 @@ app.get("/dashboard/documents-count", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.get("/medicaments", async (req, res) => {
-  try {
-    const search = req.query.search || "";
-
-    // 👉 SI VIDE → favoris
-    if (!search) {
-      const r = await pool.query(`
-        SELECT id, nom
-        FROM medicaments
-        WHERE LOWER(nom) IN (
-          'paracétamol',
-          'amoxicilline',
-          'zanidip',
-          'metformine',
-          'ventoline',
-          'doliprane',
-          'augmentin',
-          'cardensiel'
-        )
-        ORDER BY nom ASC
-        LIMIT 20
-      `);
-
-      return res.json(r.rows);
-    }
-
-    // 👉 SINON → recherche intelligente
-    const r = await pool.query(
-      `
-      SELECT id, nom
-      FROM medicaments
-      WHERE nom ILIKE $1
-      ORDER BY 
-        CASE 
-          WHEN LOWER(nom) LIKE LOWER($2) THEN 0
-          WHEN LOWER(nom) LIKE LOWER($3) THEN 1
-          ELSE 2
-        END,
-        LENGTH(nom),
-        nom ASC
-      LIMIT 20
-      `,
-      [
-        `%${search}%`,
-        `${search}%`,
-        `%${search}%`
-      ]
-    );
-
-    res.json(r.rows);
-  } catch (err) {
-    console.log("MED ERROR", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 app.get("/posologie", async (req,res)=>{
   try{
 
@@ -5237,7 +5173,7 @@ app.get("/dashboard/messages-count", authRequired, async (req, res) => {
     res.json({ count: Number(r.rows[0].count || 0) });
   } catch (err) {
     console.log("MESSAGES COUNT ERROR:", err.message);
-    res.json({ count: 0 });
+    res.status(500).json({ error: err.message });
   }
 });
 
