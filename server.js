@@ -3891,17 +3891,26 @@ app.get("/rdv-demandes", authRequired, async (req, res) => {
 /* ================= DASHBOARD ================= */
 app.get("/dashboard/stats", async (req, res) => {
   try {
+    const cabinetId = req.user.cabinet_id;
+
     const patients = await pool.query(
-  "SELECT COUNT(*) FROM patients WHERE is_mobile_account = false AND actif = true"
-);
+      "SELECT COUNT(*) FROM patients WHERE cabinet_id = $1 AND is_mobile_account = false AND actif = true",
+      [cabinetId]
+    );
+
     const consultations = await pool.query(
-      "SELECT COUNT(*) FROM consultations WHERE date_consultation = CURRENT_DATE"
+      "SELECT COUNT(*) FROM consultations WHERE cabinet_id = $1 AND date_consultation = CURRENT_DATE",
+      [cabinetId]
     );
+
     const rdv = await pool.query(
-      "SELECT COUNT(*) FROM rendez_vous WHERE date_rdv = CURRENT_DATE AND statut <> 'annule'"
+      "SELECT COUNT(*) FROM rendez_vous WHERE cabinet_id = $1 AND date_rdv = CURRENT_DATE AND statut <> 'annule'",
+      [cabinetId]
     );
+
     const demandes = await pool.query(
-      "SELECT COUNT(*) FROM rendez_vous WHERE statut = 'demande'"
+      "SELECT COUNT(*) FROM rendez_vous WHERE cabinet_id = $1 AND statut = 'demande'",
+      [cabinetId]
     );
 
     res.json({
@@ -3910,11 +3919,13 @@ app.get("/dashboard/stats", async (req, res) => {
       rendezvous: Number(rdv.rows[0].count || 0),
       demandes: Number(demandes.rows[0].count || 0),
     });
+
   } catch (err) {
     console.log("DASHBOARD STATS ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 app.get("/dashboard/document-recu-notification", async (req, res) => {
   try {
