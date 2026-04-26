@@ -3904,25 +3904,31 @@ app.get("/dashboard/stats", authRequired, async (req, res) => {
       });
     }
 
-    const patients = await pool.query(
-      "SELECT COUNT(*) FROM patients WHERE cabinet_id = $1 AND actif = true",
-      [cabinetId]
-    );
+    const patients = await pool.query(`
+      SELECT COUNT(*) FROM patients
+      WHERE cabinet_id = $1
+      AND is_mobile_account = false
+      AND actif = true
+    `, [cabinetId]);
 
-    const consultations = await pool.query(
-      "SELECT COUNT(*) FROM consultations WHERE cabinet_id = $1 AND date_consultation = CURRENT_DATE",
-      [cabinetId]
-    );
+    const consultations = await pool.query(`
+      SELECT COUNT(*) FROM consultations
+      WHERE cabinet_id = $1
+      AND date_consultation = CURRENT_DATE
+    `, [cabinetId]);
 
-    const rdv = await pool.query(
-      "SELECT COUNT(*) FROM rendez_vous WHERE cabinet_id = $1 AND date_rdv = CURRENT_DATE AND statut <> 'annule'",
-      [cabinetId]
-    );
+    const rdv = await pool.query(`
+      SELECT COUNT(*) FROM rendez_vous
+      WHERE cabinet_id = $1
+      AND date_rdv = CURRENT_DATE
+      AND statut <> 'annule'
+    `, [cabinetId]);
 
-    const demandes = await pool.query(
-      "SELECT COUNT(*) FROM rendez_vous WHERE cabinet_id = $1 AND statut = 'demande'",
-      [cabinetId]
-    );
+    const demandes = await pool.query(`
+      SELECT COUNT(*) FROM rendez_vous
+      WHERE cabinet_id = $1
+      AND statut = 'demande'
+    `, [cabinetId]);
 
     res.json({
       patients: Number(patients.rows[0].count || 0),
@@ -3933,9 +3939,15 @@ app.get("/dashboard/stats", authRequired, async (req, res) => {
 
   } catch (err) {
     console.log("DASHBOARD STATS ERROR:", err.message);
-    res.status(500).json({ error: err.message });
+    res.json({
+      patients: 0,
+      consultations: 0,
+      rendezvous: 0,
+      demandes: 0,
+    });
   }
 });
+
 
 
 app.get("/dashboard/document-recu-notification", authRequired, async (req, res) => {
@@ -5133,21 +5145,23 @@ app.get("/dashboard/messages-count", authRequired, async (req, res) => {
   try {
     const cabinetId = req.user?.cabinet_id;
 
+    if (!cabinetId) {
+      return res.json({ count: 0 });
+    }
+
     const r = await pool.query(`
       SELECT COUNT(*)
       FROM messages m
-      LEFT JOIN medecins me ON me.id = m.destinataire_id
-      WHERE me.cabinet_id = $1
+      WHERE m.cabinet_id = $1
     `, [cabinetId]);
 
     res.json({ count: Number(r.rows[0].count || 0) });
 
   } catch (err) {
     console.log("MESSAGES COUNT ERROR:", err.message);
-    res.status(500).json({ error: err.message });
+    res.json({ count: 0 }); // ⚠️ jamais crash
   }
 });
-
 
 app.listen(PORT, () => {
   console.log(`Serveur PRO lancé sur le port ${PORT} 🚀`);
