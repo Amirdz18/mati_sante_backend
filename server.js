@@ -3932,13 +3932,8 @@ app.get("/dashboard/document-recu-notification", async (req, res) => {
     const cabinetId = req.user.cabinet_id;
 
     const r = await pool.query(`
-      SELECT
-        d.id,
-        d.nom,
-        d.titre,
-        d.contenu,
-        d.created_at,
-        COALESCE(p.nom, '') || ' ' || COALESCE(p.prenom, '') AS patient_nom
+      SELECT d.id, d.nom, d.titre, d.contenu, d.created_at,
+      COALESCE(p.nom, '') || ' ' || COALESCE(p.prenom, '') AS patient_nom
       FROM documents d
       LEFT JOIN patients p ON p.id = d.patient_id
       WHERE d.cabinet_id = $1
@@ -3954,6 +3949,7 @@ app.get("/dashboard/document-recu-notification", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 app.post("/dashboard/document-recu-notification/:id/read", async (req, res) => {
   try {
     const { id } = req.params;
@@ -3981,8 +3977,8 @@ app.get("/dashboard/documents-count", async (req, res) => {
       SELECT COUNT(*)
       FROM documents
       WHERE cabinet_id = $1
-      AND COALESCE(lu_dashboard,false) = false
-      AND COALESCE(source_document, 'patient') = 'patient'
+        AND COALESCE(lu_dashboard,false) = false
+        AND COALESCE(source_document, 'patient') = 'patient'
     `, [cabinetId]);
 
     res.json({ count: Number(r.rows[0].count || 0) });
@@ -3991,7 +3987,6 @@ app.get("/dashboard/documents-count", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 app.get("/medicaments", async (req, res) => {
   try {
     const search = req.query.search || "";
@@ -4820,24 +4815,17 @@ app.delete("/patient/message/:id", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-app.get("/dashboard/messages-count", authRequired, async (req, res) => {
+app.get("/dashboard/messages-count", async (req, res) => {
   try {
-   const result = await pool.query(
-  `
-  SELECT COUNT(*) 
-  FROM messages 
-  WHERE sender = 'patient'
-  AND cabinet_id = $1
-  AND lu = false
-  AND contenu IS NOT NULL
-  AND TRIM(contenu) <> ''
-  `,
-  [req.user.cabinet_id]
-);
+    const cabinetId = req.user.cabinet_id;
 
-    res.json({
-      count: Number(result.rows[0].count),
-    });
+    const r = await pool.query(`
+      SELECT COUNT(*)
+      FROM messages
+      WHERE cabinet_id = $1
+    `, [cabinetId]);
+
+    res.json({ count: Number(r.rows[0].count || 0) });
   } catch (err) {
     console.log("MESSAGES COUNT ERROR:", err.message);
     res.status(500).json({ error: err.message });
