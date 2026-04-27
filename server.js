@@ -2793,9 +2793,18 @@ app.put("/parametres", async (req, res) => {
   }
 });
 
-app.get("/parametres", async (req, res) => {
+app.get("/parametres", authRequired, async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM parametres LIMIT 1");
+    const cabinetId = req.user?.cabinet_id;
+
+    if (!cabinetId) {
+      return res.json({});
+    }
+
+    const result = await pool.query(
+      "SELECT * FROM parametres WHERE cabinet_id = $1 LIMIT 1",
+      [cabinetId]
+    );
 
     if (result.rows.length === 0) {
       return res.json({});
@@ -2803,9 +2812,11 @@ app.get("/parametres", async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (err) {
+    console.log("PARAMETRES ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
 app.post("/parametres/logo", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "Aucun fichier envoyé" });
@@ -4074,6 +4085,7 @@ app.get("/medicaments", authRequired, async (req, res) => {
 app.get("/test-backend", (req, res) => {
   console.log("TEST BACKEND OK");
   res.json({ ok: true });
+
 });
 // =============================
 // ASSISTANT INTELLIGENT PATIENT
