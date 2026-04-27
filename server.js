@@ -2743,9 +2743,13 @@ async function ensureParametresRow() {
   return res.rows[0].id;
 }
 
-app.put("/parametres", async (req, res) => {
+app.put("/parametres", authRequired, async (req, res) => {
   try {
-    const id = await ensureParametresRow();
+    const cabinetId = req.user?.cabinet_id;
+
+    if (!cabinetId) {
+      return res.status(401).json({ error: "Cabinet non identifié" });
+    }
 
     const payload = {
       cabinet_nom: req.body.cabinet_nom ?? null,
@@ -2759,8 +2763,52 @@ app.put("/parametres", async (req, res) => {
       note_entete: req.body.note_entete ?? null,
     };
 
+    let existing = await pool.query(
+      "SELECT id FROM parametres WHERE cabinet_id = $1 LIMIT 1",
+      [cabinetId]
+    );
+
+    if (existing.rows.length === 0) {
+      const inserted = await pool.query(
+        `
+        INSERT INTO parametres (
+          cabinet_id,
+          cabinet_nom,
+          medecin_nom,
+          specialite,
+          numero_ordre,
+          adresse,
+          telephone,
+          email,
+          ville,
+          note_entete,
+          updated_at
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+        RETURNING *
+        `,
+        [
+          cabinetId,
+          payload.cabinet_nom,
+          payload.medecin_nom,
+          payload.specialite,
+          payload.numero_ordre,
+          payload.adresse,
+          payload.telephone,
+          payload.email,
+          payload.ville,
+          payload.note_entete,
+        ]
+      );
+
+      return res.json(inserted.rows[0]);
+    }
+
+    const id = existing.rows[0].id;
+
     const upd = await pool.query(
-      `UPDATE parametres SET
+      `
+      UPDATE parametres SET
         cabinet_nom = $1,
         medecin_nom = $2,
         specialite = $3,
@@ -2771,8 +2819,10 @@ app.put("/parametres", async (req, res) => {
         ville = $8,
         note_entete = $9,
         updated_at = NOW()
-       WHERE id = $10
-       RETURNING *`,
+      WHERE id = $10
+        AND cabinet_id = $11
+      RETURNING *
+      `,
       [
         payload.cabinet_nom,
         payload.medecin_nom,
@@ -2784,35 +2834,13 @@ app.put("/parametres", async (req, res) => {
         payload.ville,
         payload.note_entete,
         id,
+        cabinetId,
       ]
     );
 
     res.json(upd.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get("/parametres", authRequired, async (req, res) => {
-  try {
-    const cabinetId = req.user?.cabinet_id;
-
-    if (!cabinetId) {
-      return res.json({});
-    }
-
-    const result = await pool.query(
-      "SELECT * FROM parametres WHERE cabinet_id = $1 LIMIT 1",
-      [cabinetId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.json({});
-    }
-
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.log("PARAMETRES ERROR:", err.message);
+    console.log("PARAMETRES PUT ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -5207,6 +5235,33 @@ app.get("/app/version", (req, res) => {
     url: "https://github.com/Amirdz18/mati-connect/releases/download/v0.1.0/Mati.Sante.Setup.0.1.0.exe",
     notes: "Corrections et améliorations"
   });
+});
+app.get("/parametres", authRequired, async (req, res) => {
+  try {
+    const cabinetId = req.user?.cabinet_id;
+
+    if (!cabinetId) {
+      return res.json({});
+    }
+
+    const result = await pool.query(
+      "SELECT * FROM parametres WHERE cabinet_id = $1 LIMIT 1",
+      [cabinetId]
+    );
+
+    if (result.rows.length === 0) {
+      const inserted = await pool.query(
+        "INSERT INTO parametres (cabinet_id) VALUES ($1) RETURNING *",
+        [cabinetId]
+      );
+      return res.json(inserted.rows[0]);
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.log("PARAMETRES GET ERROR:", err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => {
