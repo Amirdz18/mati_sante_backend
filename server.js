@@ -4048,6 +4048,27 @@ app.get("/posologie", async (req,res)=>{
     res.status(500).json({error:err.message})
   }
 })
+app.get("/medicaments", authRequired, async (req, res) => {
+  try {
+    const search = req.query.search || "";
+
+    const r = await pool.query(
+      `
+      SELECT id, nom
+      FROM medicaments
+      WHERE nom ILIKE $1
+      ORDER BY nom ASC
+      LIMIT 10
+      `,
+      [`%${search}%`]
+    );
+
+    res.json(r.rows);
+  } catch (err) {
+    console.log("MEDICAMENTS ERROR:", err.message);
+    res.json([]);
+  }
+});
 
 
 app.get("/test-backend", (req, res) => {
