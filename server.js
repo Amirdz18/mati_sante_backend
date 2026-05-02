@@ -80,7 +80,8 @@ async function generateOrdonnancePdfAndUpload({
 
 const barcodeRaw = `RX-${patient_id}-${Date.now()}`;
 const cab = await pool.query(
-  "SELECT * FROM parametres LIMIT 1"
+  "SELECT * FROM parametres WHERE cabinet_id = $1 LIMIT 1",
+  [cabinet_id]
 );
 
 const cabinetNom = cab.rows[0]?.nom || cab.rows[0]?.cabinet_nom || "";
@@ -105,6 +106,11 @@ const age =
   console.log("PDF PATIENT =", { patient_id, patientData, patientNomComplet });
 
 const cabinet = cab.rows[0] || {};
+const numeroOrdre =
+  cabinet.numero_ordre ||
+  cabinet.ordre ||
+  cabinet.num_ordre ||
+  "";
 console.log("CABINET FULL =", cabinet);
 
 const html = `
@@ -334,7 +340,8 @@ const html = `
   ${cabinet.medecin_nom ? "Dr " + cabinet.medecin_nom : ""}
 </div>
   <div class="cabLine">${cabinet.specialite || ""}</div>
-  <div class="cabLine">${cabinet.adresse || ""}</div>
+<div class="cabLine"><b>N° Ordre :</b> ${escapeHtml(numeroOrdre || "Non renseigné")}</div>
+<div class="cabLine">${cabinet.adresse || ""}</div>
   <div class="cabLine">Tél: ${cabinet.telephone || ""}</div>
   <div class="cabLine">${cabinet.email || ""}</div>
 </div>
@@ -2368,7 +2375,11 @@ if (!fichierPath && contenu) {
   titre,
   contenu,
   patient_id,
-  cabinet_id: req.user.cabinet_id, // 👈 AJOUTE ÇA
+  cabinet_id: req.user.cabinet_id,
+  cabinet_nom: req.body.cabinet_nom || "",
+  medecin_nom: req.body.medecin_nom || "",
+  specialite: req.body.specialite || "",
+  numero_ordre: req.body.numero_ordre || "",
 });
 }
     const insertCols = [];
